@@ -1,0 +1,418 @@
+{
+  "run_id": "run_20261122_123344_2ad03c38",
+  "saved_at_utc": "2026-11-22T12:33:44.435859+00:00",
+  "metadata": {
+    "python_version": "3.9.6",
+    "platform": "macOS-27.2.1-arm64-arm-64bit",
+    "ammeters_tested": [
+      "greenlee",
+      "entes",
+      "circutor"
+    ]
+  },
+  "results": {
+    "greenlee": {
+      "ammeter_name": "greenlee",
+      "method": "Ohm's Law (I = V / R)",
+      "sampling_config": {
+        "measurements_count": 15,
+        "total_duration_seconds": 1.0,
+        "sampling_frequency_hz": 15.0,
+        "interval_seconds": 0.066667
+      },
+      "started_at": "2026-11-22T12:33:41.612979+00:00",
+      "completed_at": "2026-11-22T12:33:42.548467+00:00",
+      "actual_duration_seconds": 0.935471,
+      "samples_collected": 15,
+      "errors_count": 0,
+      "samples": [
+        {
+          "index": 0,
+          "timestamp_iso": "2026-11-22T12:33:41.612998+00:00",
+          "elapsed_seconds": 6e-06,
+          "current_amps": 0.1540778903431602
+        },
+        {
+          "index": 1,
+          "timestamp_iso": "2026-11-22T12:33:41.684689+00:00",
+          "elapsed_seconds": 0.071721,
+          "current_amps": 0.17032433765469385
+        },
+        {
+          "index": 2,
+          "timestamp_iso": "2026-11-22T12:33:41.751399+00:00",
+          "elapsed_seconds": 0.138439,
+          "current_amps": 0.12209888989978362
+        },
+        {
+          "index": 3,
+          "timestamp_iso": "2026-11-22T12:33:41.818038+00:00",
+          "elapsed_seconds": 0.205062,
+          "current_amps": 0.06046441073089346
+        },
+        {
+          "index": 4,
+          "timestamp_iso": "2026-11-22T12:33:41.884592+00:00",
+          "elapsed_seconds": 0.271621,
+          "current_amps": 0.039922418113596966
+        },
+        {
+          "index": 5,
+          "timestamp_iso": "2026-11-22T12:33:41.951358+00:00",
+          "elapsed_seconds": 0.33839,
+          "current_amps": 0.18534740357424828
+        },
+        {
+          "index": 6,
+          "timestamp_iso": "2026-11-22T12:33:42.016184+00:00",
+          "elapsed_seconds": 0.403207,
+          "current_amps": 0.23140486477295885
+        },
+        {
+          "index": 7,
+          "timestamp_iso": "2026-11-22T12:33:42.082852+00:00",
+          "elapsed_seconds": 0.469873,
+          "current_amps": 0.0813725463223662
+        },
+        {
+          "index": 8,
+          "timestamp_iso": "2026-11-22T12:33:42.148945+00:00",
+          "elapsed_seconds": 0.535969,
+          "current_amps": 0.07052902038037057
+        },
+        {
+          "index": 9,
+          "timestamp_iso": "2026-11-22T12:33:42.216391+00:00",
+          "elapsed_seconds": 0.603423,
+          "current_amps": 0.16747445548582277
+        },
+        {
+          "index": 10,
+          "timestamp_iso": "2026-11-22T12:33:42.284699+00:00",
+          "elapsed_seconds": 0.671741,
+          "current_amps": 0.20234772359002012
+        },
+        {
+          "index": 11,
+          "timestamp_iso": "2026-11-22T12:33:42.351368+00:00",
+          "elapsed_seconds": 0.738402,
+          "current_amps": 1.4863644901141737
+        },
+        {
+          "index": 12,
+          "timestamp_iso": "2026-11-22T12:33:42.416209+00:00",
+          "elapsed_seconds": 0.80325,
+          "current_amps": 0.07634577003281005
+        },
+        {
+          "index": 13,
+          "timestamp_iso": "2026-11-22T12:33:42.484699+00:00",
+          "elapsed_seconds": 0.871741,
+          "current_amps": 0.19203716529527906
+        },
+        {
+          "index": 14,
+          "timestamp_iso": "2026-11-22T12:33:42.547746+00:00",
+          "elapsed_seconds": 0.93477,
+          "current_amps": 0.15712692190237115
+        }
+      ],
+      "errors": [],
+      "include_precision_metrics": false,
+      "statistics": {
+        "count": 15,
+        "mean": 0.226483,
+        "median": 0.157127,
+        "std_dev": 0.353418,
+        "min": 0.039922,
+        "max": 1.486364
+      }
+    },
+    "entes": {
+      "ammeter_name": "entes",
+      "method": "Hall Effect (I = B * K)",
+      "sampling_config": {
+        "measurements_count": 15,
+        "total_duration_seconds": 1.0,
+        "sampling_frequency_hz": 15.0,
+        "interval_seconds": 0.066667
+      },
+      "started_at": "2026-11-22T12:33:42.549008+00:00",
+      "completed_at": "2026-11-22T12:33:43.492263+00:00",
+      "actual_duration_seconds": 0.94325,
+      "samples_collected": 15,
+      "errors_count": 0,
+      "samples": [
+        {
+          "index": 0,
+          "timestamp_iso": "2026-11-22T12:33:42.549012+00:00",
+          "elapsed_seconds": 2e-06,
+          "current_amps": 39.38932646100061
+        },
+        {
+          "index": 1,
+          "timestamp_iso": "2026-11-22T12:33:42.620719+00:00",
+          "elapsed_seconds": 0.071727,
+          "current_amps": 41.16325968740313
+        },
+        {
+          "index": 2,
+          "timestamp_iso": "2026-11-22T12:33:42.685551+00:00",
+          "elapsed_seconds": 0.13656,
+          "current_amps": 27.355058741025363
+        },
+        {
+          "index": 3,
+          "timestamp_iso": "2026-11-22T12:33:42.749426+00:00",
+          "elapsed_seconds": 0.200436,
+          "current_amps": 103.12882590668815
+        },
+        {
+          "index": 4,
+          "timestamp_iso": "2026-11-22T12:33:42.820703+00:00",
+          "elapsed_seconds": 0.271718,
+          "current_amps": 30.19143923384781
+        },
+        {
+          "index": 5,
+          "timestamp_iso": "2026-11-22T12:33:42.887367+00:00",
+          "elapsed_seconds": 0.338379,
+          "current_amps": 10.99934011616962
+        },
+        {
+          "index": 6,
+          "timestamp_iso": "2026-11-22T12:33:42.953080+00:00",
+          "elapsed_seconds": 0.404092,
+          "current_amps": 50.1124845746479
+        },
+        {
+          "index": 7,
+          "timestamp_iso": "2026-11-22T12:33:43.024523+00:00",
+          "elapsed_seconds": 0.475541,
+          "current_amps": 40.1512739264272
+        },
+        {
+          "index": 8,
+          "timestamp_iso": "2026-11-22T12:33:43.087372+00:00",
+          "elapsed_seconds": 0.538381,
+          "current_amps": 43.493801470385904
+        },
+        {
+          "index": 9,
+          "timestamp_iso": "2026-11-22T12:33:43.151602+00:00",
+          "elapsed_seconds": 0.602609,
+          "current_amps": 93.57942959550125
+        },
+        {
+          "index": 10,
+          "timestamp_iso": "2026-11-22T12:33:43.220696+00:00",
+          "elapsed_seconds": 0.671706,
+          "current_amps": 32.408893604525794
+        },
+        {
+          "index": 11,
+          "timestamp_iso": "2026-11-22T12:33:43.287383+00:00",
+          "elapsed_seconds": 0.738395,
+          "current_amps": 139.18748937400738
+        },
+        {
+          "index": 12,
+          "timestamp_iso": "2026-11-22T12:33:43.354044+00:00",
+          "elapsed_seconds": 0.805084,
+          "current_amps": 59.48768020737891
+        },
+        {
+          "index": 13,
+          "timestamp_iso": "2026-11-22T12:33:43.420009+00:00",
+          "elapsed_seconds": 0.875431,
+          "current_amps": 44.42405146552552
+        },
+        {
+          "index": 14,
+          "timestamp_iso": "2026-11-22T12:33:43.487403+00:00",
+          "elapsed_seconds": 0.938436,
+          "current_amps": 56.342274556830404
+        }
+      ],
+      "errors": [],
+      "include_precision_metrics": false,
+      "statistics": {
+        "count": 15,
+        "mean": 54.094309,
+        "median": 43.493801,
+        "std_dev": 33.436309,
+        "min": 10.99934,
+        "max": 139.187489
+      }
+    },
+    "circutor": {
+      "ammeter_name": "circutor",
+      "method": "Rogowski Coil Integration (I = integral V dt)",
+      "sampling_config": {
+        "measurements_count": 15,
+        "total_duration_seconds": 1.0,
+        "sampling_frequency_hz": 15.0,
+        "interval_seconds": 0.066667
+      },
+      "started_at": "2026-11-22T12:33:43.493417+00:00",
+      "completed_at": "2026-11-22T12:33:44.433022+00:00",
+      "actual_duration_seconds": 0.939596,
+      "samples_collected": 15,
+      "errors_count": 0,
+      "samples": [
+        {
+          "index": 0,
+          "timestamp_iso": "2026-11-22T12:33:43.493426+00:00",
+          "elapsed_seconds": 5e-06,
+          "current_amps": 0.013592051510005759
+        },
+        {
+          "index": 1,
+          "timestamp_iso": "2026-11-22T12:33:43.565147+00:00",
+          "elapsed_seconds": 0.071797,
+          "current_amps": 0.04050632031905298
+        },
+        {
+          "index": 2,
+          "timestamp_iso": "2026-11-22T12:33:43.631778+00:00",
+          "elapsed_seconds": 0.13837,
+          "current_amps": 0.011423234301362595
+        },
+        {
+          "index": 3,
+          "timestamp_iso": "2026-11-22T12:33:43.695256+00:00",
+          "elapsed_seconds": 0.201847,
+          "current_amps": 0.03790559234915422
+        },
+        {
+          "index": 4,
+          "timestamp_iso": "2026-11-22T12:33:43.761078+00:00",
+          "elapsed_seconds": 0.267682,
+          "current_amps": 0.027239803340253187
+        },
+        {
+          "index": 5,
+          "timestamp_iso": "2026-11-22T12:33:43.831799+00:00",
+          "elapsed_seconds": 0.338402,
+          "current_amps": 0.012921086578922405
+        },
+        {
+          "index": 6,
+          "timestamp_iso": "2026-11-22T12:33:43.895777+00:00",
+          "elapsed_seconds": 0.402415,
+          "current_amps": 0.03461487835651847
+        },
+        {
+          "index": 7,
+          "timestamp_iso": "2026-11-22T12:33:43.962870+00:00",
+          "elapsed_seconds": 0.469497,
+          "current_amps": 0.056469415618490025
+        },
+        {
+          "index": 8,
+          "timestamp_iso": "2026-11-22T12:33:44.028282+00:00",
+          "elapsed_seconds": 0.534902,
+          "current_amps": 0.013763439791600081
+        },
+        {
+          "index": 9,
+          "timestamp_iso": "2026-11-22T12:33:44.095994+00:00",
+          "elapsed_seconds": 0.602592,
+          "current_amps": 0.025974723840985814
+        },
+        {
+          "index": 10,
+          "timestamp_iso": "2026-11-22T12:33:44.161680+00:00",
+          "elapsed_seconds": 0.668277,
+          "current_amps": 0.03214805730852015
+        },
+        {
+          "index": 11,
+          "timestamp_iso": "2026-11-22T12:33:44.231803+00:00",
+          "elapsed_seconds": 0.738394,
+          "current_amps": 0.024148168085375593
+        },
+        {
+          "index": 12,
+          "timestamp_iso": "2026-11-22T12:33:44.295790+00:00",
+          "elapsed_seconds": 0.802393,
+          "current_amps": 0.022699928483703787
+        },
+        {
+          "index": 13,
+          "timestamp_iso": "2026-11-22T12:33:44.361612+00:00",
+          "elapsed_seconds": 0.868211,
+          "current_amps": 0.04626355405016004
+        },
+        {
+          "index": 14,
+          "timestamp_iso": "2026-11-22T12:33:44.431798+00:00",
+          "elapsed_seconds": 0.9384,
+          "current_amps": 0.01647382706052216
+        }
+      ],
+      "errors": [],
+      "include_precision_metrics": false,
+      "statistics": {
+        "count": 15,
+        "mean": 0.027743,
+        "median": 0.025975,
+        "std_dev": 0.0135,
+        "min": 0.011423,
+        "max": 0.056469
+      }
+    }
+  },
+  "comparison": {
+    "metric_used": "coefficient_of_variation (lower is more consistent)",
+    "most_reliable": "circutor",
+    "ranking": [
+      {
+        "ammeter_name": "circutor",
+        "method": "Rogowski Coil Integration (I = integral V dt)",
+        "samples_count": 15,
+        "mean": 0.027743,
+        "median": 0.025975,
+        "std_dev": 0.0135,
+        "cv": 0.486606,
+        "cv_percent": 48.66,
+        "iqr": 0.021142,
+        "ci95_low": 0.020267,
+        "ci95_high": 0.035219,
+        "consistency_rating": "moderate",
+        "rank": 1
+      },
+      {
+        "ammeter_name": "entes",
+        "method": "Hall Effect (I = B * K)",
+        "samples_count": 15,
+        "mean": 54.094309,
+        "median": 43.493801,
+        "std_dev": 33.436309,
+        "cv": 0.618111,
+        "cv_percent": 61.81,
+        "iqr": 22.015867,
+        "ci95_low": 35.577898,
+        "ci95_high": 72.610719,
+        "consistency_rating": "low",
+        "rank": 2
+      },
+      {
+        "ammeter_name": "greenlee",
+        "method": "Ohm's Law (I = V / R)",
+        "samples_count": 15,
+        "mean": 0.226483,
+        "median": 0.157127,
+        "std_dev": 0.353418,
+        "cv": 1.560464,
+        "cv_percent": 156.05,
+        "iqr": 0.109833,
+        "ci95_low": 0.030766,
+        "ci95_high": 0.422199,
+        "consistency_rating": "low",
+        "rank": 3
+      }
+    ],
+    "summary": "Most consistent ammeter: 'circutor' (Rogowski Coil Integration (I = integral V dt)) with lowest relative dispersion CV=48.66% (mean=0.027743 A, std=0.0135 A)."
+  }
+}

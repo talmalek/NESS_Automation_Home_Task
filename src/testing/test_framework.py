@@ -1,6 +1,7 @@
-from typing import Any, Dict, Iterable, Optional
+from typing import Any, Dict, Iterable, List, Optional
 
 from src.analysis.analyzer import StatisticalAnalyzer
+from src.storage.result_manager import ResultManager
 from src.testing.ammeter_client import BaseAmmeterClient, TcpAmmeterClient
 from src.testing.sampler import CurrentSampler, ErrorSimulator
 from src.utils.config import (
@@ -9,6 +10,7 @@ from src.utils.config import (
     load_config,
 )
 from src.utils.logger import TestLogger
+from src.visualization.visualizer import ResultVisualizer
 
 
 class AmmeterTestFramework:
@@ -22,6 +24,7 @@ class AmmeterTestFramework:
         self.config_path = config_path
         self.config = load_config(config_path)
         rm_cfg = self.config.get("result_management", {}) or {}
+        viz_cfg = (self.config.get("analysis", {}) or {}).get("visualization", {}) or {}
         log_dir = rm_cfg.get("log_dir", "results/logs")
         log_level = rm_cfg.get("log_level", "VERBOSE")
         self.logger = logger or TestLogger(
@@ -29,6 +32,8 @@ class AmmeterTestFramework:
         )
         self.sampler = CurrentSampler()
         self.analyzer = StatisticalAnalyzer()
+        self.result_manager = ResultManager(save_dir=rm_cfg.get("save_path", "results/runs"))
+        self.visualizer = ResultVisualizer(output_dir=viz_cfg.get("output_dir", "results/plots"))
 
     @property
     def configured_ammeters(self) -> Iterable[str]:
@@ -114,6 +119,61 @@ class AmmeterTestFramework:
         comparison = self.analyzer.compare_ammeters(results)
         self.logger.info(comparison["summary"])
         return comparison
+
+    def execute_suite(
+        self,
+        ammeter_types: Optional[Iterable[str]] = None,
+        measurements_count: Optional[int] = None,
+        total_duration_seconds: Optional[float] = None,
+        sampling_frequency_hz: Optional[float] = None,
+        include_precision_metrics: Optional[bool] = None,
+        save: bool = True,
+        visualize: Optional[bool] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Run full test suite, compare ammeters, archive JSON results, and generate plots."""
+        results = self.run_all(
+            ammeter_types=ammeter_types,
+            measurements_count=measurements_count,
+            total_duration_seconds=total_duration_seconds,
+            sampling_frequency_hz=sampling_frequency_hz,
+            include_precision_metrics=include_precision_metrics,
+        )
+
+        valid_count = sum(1 for r in results.values() if r.get("samples"))
+        comparison = self.compare_results(results) if valid_count >= 2 else None
+
+        run_id = self.result_manager.generate_run_id()
+        saved_record: Optional[Dict[str, Any]] = None
+        if save:
+            saved_record = self.result_manager.save_run(
+                results=results,
+                comparison=comparison,
+                metadata=metadata,
+                run_id=run_id,
+            )
+            self.logger.info(f"Saved run '{run_id}' -> {saved_record['file_path']}")
+
+        viz_cfg = (self.config.get("analysis", {}) or {}).get("visualization", {}) or {}
+        should_plot = viz_cfg.get("enabled", True) if visualize is None else visualize
+        plots: List[str] = []
+        if should_plot:
+            plots = self.visualizer.generate_plots(
+                run_id=run_id,
+                results=results,
+                comparison=comparison,
+                plot_types=viz_cfg.get("plot_types"),
+            )
+            for plot_path in plots:
+                self.logger.info(f"Generated plot -> {plot_path}")
+
+        return {
+            "run_id": run_id,
+            "results": results,
+            "comparison": comparison,
+            "saved_path": saved_record["file_path"] if saved_record else None,
+            "plots": plots,
+        }
 
     def run_all(
         self,
