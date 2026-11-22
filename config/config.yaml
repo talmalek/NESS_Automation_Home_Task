@@ -23,15 +23,13 @@ ammeters:
     method: "Rogowski Coil Integration (I = integral V dt)"
 
 analysis:
+  include_precision_metrics: false
   statistical_metrics:
     - mean
     - median
     - std_dev
     - min
     - max
-    - cv
-    - iqr
-    - ci95
   visualization:
     enabled: true
     output_dir: "results/plots"
@@ -43,4 +41,5 @@ analysis:
 result_management:
   save_path: "results/runs"
   log_dir: "results/logs"
+  log_level: "VERBOSE"  # VERBOSE logs every sample reading; set to INFO in production
   format: "json"

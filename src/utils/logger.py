@@ -1,13 +1,42 @@
 import logging
 import os
 from datetime import datetime
+from typing import Union
+
+VERBOSE_LEVEL = 15
+logging.addLevelName(VERBOSE_LEVEL, "VERBOSE")
+
+_LEVEL_MAP = {
+    "DEBUG": logging.DEBUG,
+    "VERBOSE": VERBOSE_LEVEL,
+    "INFO": logging.INFO,
+    "WARNING": logging.WARNING,
+    "ERROR": logging.ERROR,
+    "CRITICAL": logging.CRITICAL,
+}
+
+
+def parse_log_level(level: Union[int, str]) -> int:
+    """Convert a string or integer log level (including VERBOSE=15) to a logging int."""
+    if isinstance(level, int):
+        return level
+    normalized = level.strip().upper()
+    if normalized not in _LEVEL_MAP:
+        allowed = ", ".join(_LEVEL_MAP.keys())
+        raise ValueError(f"Unsupported log level {level!r}. Allowed: {allowed}")
+    return _LEVEL_MAP[normalized]
 
 
 class TestLogger:
-    def __init__(self, test_name: str, log_dir: str = "results/logs", level: int = logging.INFO):
+    def __init__(
+        self,
+        test_name: str,
+        log_dir: str = "results/logs",
+        level: Union[int, str] = VERBOSE_LEVEL,
+    ):
         self._test_name = test_name
         self._log_dir = log_dir
-        self._level = level
+        self._level = parse_log_level(level)
         self.log_file = ""
         self.logger = self._setup_logger()
 
@@ -36,11 +65,25 @@ class TestLogger:
 
             logger.addHandler(file_handler)
             logger.addHandler(stream_handler)
+        else:
+            for handler in logger.handlers:
+                handler.setLevel(self._level)
 
         return logger
 
+    def set_level(self, level: Union[int, str]) -> None:
+        """Dynamically adjust logger and handler levels."""
+        resolved = parse_log_level(level)
+        self._level = resolved
+        self.logger.setLevel(resolved)
+        for handler in self.logger.handlers:
+            handler.setLevel(resolved)
+
     def info(self, message: str) -> None:
         self.logger.info(message)
+
+    def verbose(self, message: str) -> None:
+        self.logger.log(VERBOSE_LEVEL, message)
 
     def error(self, message: str) -> None:
         self.logger.error(message)

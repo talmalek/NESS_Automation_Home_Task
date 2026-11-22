@@ -32,12 +32,13 @@ We keep emulator measurement logic (`Greenlee_Ammeter.py`, `Entes_Ammeter.py`, `
 
 ## 3. Functional Requirements
 
-### 3.1 Scalable OOP Ammeter Layer (`src/ammeters/`) & Unified API (`src/testing/`)
+### 3.1 Scalable OOP Ammeter Client (`src/testing/`) & Unified API
 - **Strict Immutability**: `Ammeters/Greenlee_Ammeter.py`, `Ammeters/Entes_Ammeter.py`, and `Ammeters/Circutor_Ammeter.py` are treated as read-only vendor deliverables and are **never modified**.
-- **OOP Scalability**:
-  - `BaseAmmeterAdapter` (ABC) defines the standard interface for connecting, querying, and validating readings.
-  - Dedicated per-ammeter adapters (`GreenleeAdapter`, `EntesAdapter`, `CircutorAdapter`) encapsulate ammeter-specific commands, ports, and measurement metadata.
-  - `AmmeterFactory` resolves ammeters by name from `config/config.yaml`, allowing 4th/5th ammeter types to be added without modifying the framework or analyzer.
+- **KISS + Scalable OOP (Zero Boilerplate)**:
+  - Because all current emulators return a single `float` (Amperes) over TCP, we avoid redundant per-ammeter boilerplate classes.
+  - `BaseAmmeterClient` (ABC) defines the minimal contract (`read_current() -> float`, `name`, `method`).
+  - `TcpAmmeterClient(BaseAmmeterClient)` handles any TCP ammeter purely from `config/config.yaml` (`port`, `command`, `host`, `timeout`, `method`) — adding a 4th/5th TCP ammeter requires **zero code changes**, only a YAML entry.
+  - Future non-TCP or custom-protocol ammeters can subclass `BaseAmmeterClient` without touching the sampler, framework, or analyzer.
 - **Unified API**: `AmmeterTestFramework` orchestrates sampling, analysis, storage, and visualization with consistent structured output (`TestResult` / `dict`).
 - **Out of Scope (Future Nice-to-Have)**: Lightweight HTML debug UI is intentionally excluded from core deliverables to preserve KISS.
 
@@ -52,9 +53,9 @@ We keep emulator measurement logic (`Greenlee_Ammeter.py`, `Entes_Ammeter.py`, `
 - **Default `config/config.yaml` values**: `measurements_count: 30`, `total_duration_seconds: 3.0`, `sampling_frequency_hz: null` (derived `10.0 Hz`).
 
 ### 3.3 Statistical Analysis (`src/analysis/`)
-- Per-run metrics: `mean`, `median`, `std_dev`, `min`, `max`, plus sample count and actual elapsed duration.
-- **Bonus — Consistency & Accuracy Assessment**:
-  - Coefficient of Variation (`CV = std_dev / mean`), Interquartile Range (`IQR`), and 95% confidence interval (`CI95`).
+- Per-run core metrics: `mean`, `median`, `std_dev`, `min`, `max`, plus sample count and actual elapsed duration.
+- **Bonus — Opt-In Precision & Accuracy Assessment**:
+  - Extended calibration/precision metrics (`CV`, `IQR`, `CI95`) are **opt-in** via `include_precision_metrics=True` (default `False` to keep regular runs lightweight).
   - Cross-ammeter comparison table ranking measurement precision/reliability (noting each emulator's physical model: Ohm's Law `V/R`, Hall Effect `B*K`, Rogowski integration `∑V·dt`).
 
 ### 3.4 Result Management (`src/storage/`)
@@ -72,6 +73,13 @@ We keep emulator measurement logic (`Greenlee_Ammeter.py`, `Entes_Ammeter.py`, `
 ### 3.6 Error Simulation & Handling — Bonus
 - Graceful handling of connection refused, socket timeouts, invalid commands, empty responses, and malformed payloads.
 - Configurable error-simulation hook (timeout, invalid command, dropped sample, injected outlier) for negative QA testing without modifying emulator logic.
+
+### 3.7 Structured Logging & Configurable Verbosity (QA Engineering Enhancement)
+- **SUT vs. Framework Separation**: Emulator `stdout` prints belong to the System Under Test and are never mixed into test framework logs.
+- **Custom `VERBOSE` Log Level (`15`, between `DEBUG=10` and `INFO=20`)**:
+  - Individual per-sample current readings (`[ammeter] Sample i/N | elapsed=...s | current=... A`) are logged at `VERBOSE` level.
+  - Test lifecycle events (start, completion, totals) are logged at `INFO` level; sample failures at `WARNING`.
+  - Controlled via `result_management.log_level` in `config/config.yaml` (defaults to `VERBOSE` during development/QA for full calculation auditability; switchable to `INFO` in production/CI to prevent log bloat with zero code changes).
 
 ---
 
@@ -96,13 +104,8 @@ NESS_Automation_Home_Task/
 ├── docs/
 │   └── SDR.md                 # This document
 ├── src/
-│   ├── ammeters/
-│   │   ├── base_adapter.py    # Abstract BaseAmmeterAdapter (OOP contract)
-│   │   ├── greenlee_adapter.py # Greenlee-specific adapter
-│   │   ├── entes_adapter.py   # ENTES-specific adapter
-│   │   ├── circutor_adapter.py # CIRCUTOR-specific adapter
-│   │   └── factory.py         # Scalable AmmeterFactory / registry
 │   ├── testing/
+│   │   ├── ammeter_client.py  # BaseAmmeterClient (ABC) + config-driven TcpAmmeterClient
 │   │   ├── sampler.py         # Drift-compensated sampling + 2-of-3 resolver + error sim
 │   │   └── test_framework.py  # Unified AmmeterTestFramework API
 │   ├── analysis/
