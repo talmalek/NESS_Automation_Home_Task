@@ -92,9 +92,15 @@ class AmmeterTestFramework:
                 include_precision_metrics=include_precision_metrics,
             )
             result["statistics"] = stats
-            precision_str = (
-                f", cv={stats['cv_percent']}%" if include_precision_metrics and stats.get("cv_percent") is not None else ""
-            )
+            if include_precision_metrics:
+                cv_display = f"{stats['cv_percent']}%" if stats.get("cv_percent") is not None else "N/A"
+                precision_str = (
+                    f", cv={cv_display}, iqr={stats['iqr']:.4f}A, "
+                    f"ci95=[{stats['ci95_low']:.4f}, {stats['ci95_high']:.4f}]A, "
+                    f"rating={stats['consistency_rating']}"
+                )
+            else:
+                precision_str = ""
             self.logger.info(
                 f"Stats '{active_client.name}': mean={stats['mean']:.4f}A, "
                 f"median={stats['median']:.4f}A, std={stats['std_dev']:.4f}A, "

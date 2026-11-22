@@ -1,0 +1,66 @@
+name: Ammeter Testing CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: "Test suite marker to run (all, sanity, greenlee, entes, circutor, unit, negative)"
+        required: false
+        default: "all"
+        type: choice
+        options:
+          - all
+          - sanity
+          - greenlee
+          - entes
+          - circutor
+          - unit
+          - negative
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Pre-flight Sanity Gate (Fail-Fast)
+        run: pytest -m sanity -x -v
+
+      - name: Run Test Suite & Generate HTML1 Report
+        run: |
+          if [ "${{ github.event.inputs.suite }}" = "" ] || [ "${{ github.event.inputs.suite }}" = "all" ]; then
+            pytest -v
+          else
+            pytest -m "${{ github.event.inputs.suite }}" -v
+          fi
+
+      - name: End-to-End CLI Suite & Visual Report Verification
+        run: python run_suite.py --count 15 --duration 1.0 --precision --log-level INFO
+
+      - name: Upload HTML Report, Runs & Plots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ammeter-test-results
+          path: |
+            results/report.html
+            results/runs/
+            results/plots/
+          retention-days: 14

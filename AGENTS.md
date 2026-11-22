@@ -52,4 +52,4 @@
 - [x] **Gate 3**: `StatisticalAnalyzer` (core stats + consistency + cross-ammeter accuracy ranking).
 - [x] **Gate 4**: `ResultManager`, `Visualizer`, `run_suite.py` CLI.
 - [x] **Gate 5**: Error simulation + full `pytest` suite (`tests/`).
-- [ ] **Gate 6**: GitHub Actions CI, sample results, final `README.md` (with bug-fix log & design decisions), git hygiene.
+- [x] **Gate 6**: GitHub Actions CI, sample results, final `README.md` (with bug-fix log & design decisions), git hygiene.
