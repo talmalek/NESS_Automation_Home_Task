@@ -49,7 +49,7 @@
 ## 4. Gate Progress Tracker
 - [x] **Gate 1**: `.venv` setup, minimal starter fixes (`main.py`, `base_ammeter.py`, `client.py`, `logger.py`), `config/config.yaml`, live verification of all 3 emulators.
 - [x] **Gate 2**: `config.py` validation + 2-of-3 sampling, `ammeter_client.py` (`BaseAmmeterClient` + `TcpAmmeterClient`), `sampler.py`, `AmmeterTestFramework`.
-- [ ] **Gate 3**: `StatisticalAnalyzer` (core stats + consistency + cross-ammeter accuracy ranking).
+- [x] **Gate 3**: `StatisticalAnalyzer` (core stats + consistency + cross-ammeter accuracy ranking).
 - [ ] **Gate 4**: `ResultManager`, `Visualizer`, `run_suite.py` CLI.
 - [ ] **Gate 5**: Error simulation + full `pytest` suite (`tests/`).
 - [ ] **Gate 6**: GitHub Actions CI, sample results, final `README.md` (with bug-fix log & design decisions), git hygiene.

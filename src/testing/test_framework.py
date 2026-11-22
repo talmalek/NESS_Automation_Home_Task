@@ -1,5 +1,6 @@
 from typing import Any, Dict, Iterable, Optional
 
+from src.analysis.analyzer import StatisticalAnalyzer
 from src.testing.ammeter_client import BaseAmmeterClient, TcpAmmeterClient
 from src.testing.sampler import CurrentSampler, ErrorSimulator
 from src.utils.config import (
@@ -27,6 +28,7 @@ class AmmeterTestFramework:
             "ammeter_framework", log_dir=log_dir, level=log_level
         )
         self.sampler = CurrentSampler()
+        self.analyzer = StatisticalAnalyzer()
 
     @property
     def configured_ammeters(self) -> Iterable[str]:
@@ -79,13 +81,39 @@ class AmmeterTestFramework:
         result = sampling_result.to_dict()
         result["include_precision_metrics"] = include_precision_metrics
 
+        if sampling_result.values:
+            stats = self.analyzer.analyze(
+                sampling_result.values,
+                include_precision_metrics=include_precision_metrics,
+            )
+            result["statistics"] = stats
+            precision_str = (
+                f", cv={stats['cv_percent']}%" if include_precision_metrics and stats.get("cv_percent") is not None else ""
+            )
+            self.logger.info(
+                f"Stats '{active_client.name}': mean={stats['mean']:.4f}A, "
+                f"median={stats['median']:.4f}A, std={stats['std_dev']:.4f}A, "
+                f"min={stats['min']:.4f}A, max={stats['max']:.4f}A{precision_str}"
+            )
+        else:
+            result["statistics"] = None
+            self.logger.warning(
+                f"Stats '{active_client.name}': skipped (0 valid samples collected)."
+            )
+
         self.logger.info(
             f"Completed '{active_client.name}': "
-            f"collected={sampling_result.samples_collected if hasattr(sampling_result, 'samples_collected') else len(sampling_result.samples)}, "
+            f"collected={len(sampling_result.samples)}, "
             f"errors={len(sampling_result.errors)}, "
             f"elapsed={sampling_result.actual_duration_seconds:.3f}s"
         )
         return result
+
+    def compare_results(self, results: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+        """Compare precision and reliability across multiple ammeter results."""
+        comparison = self.analyzer.compare_ammeters(results)
+        self.logger.info(comparison["summary"])
+        return comparison
 
     def run_all(
         self,
