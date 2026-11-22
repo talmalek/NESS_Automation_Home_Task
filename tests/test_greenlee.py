@@ -1,6 +1,10 @@
+import os
+
 import pytest
 
 from src.testing.test_framework import AmmeterTestFramework
+from src.visualization.visualizer import ResultVisualizer
+from tests.conftest import attach_plot_to_report
 
 pytestmark = pytest.mark.greenlee
 
@@ -15,7 +19,11 @@ def test_greenlee_sanity(greenlee_emulator, framework: AmmeterTestFramework) -> 
 
 
 def test_greenlee_sampling_and_core_stats(
-    greenlee_emulator, framework: AmmeterTestFramework
+    greenlee_emulator,
+    framework: AmmeterTestFramework,
+    session_run_id: str,
+    session_results: dict,
+    request: pytest.FixtureRequest,
 ) -> None:
     result = framework.run_test(
         "greenlee", measurements_count=8, total_duration_seconds=0.4
@@ -30,6 +38,16 @@ def test_greenlee_sampling_and_core_stats(
     assert stats["min"] <= stats["median"] <= stats["max"]
     assert stats["std_dev"] >= 0.0
     assert "cv" not in stats  # Precision metrics are opt-in by default
+
+    session_results["greenlee"] = result
+    plots = ResultVisualizer().generate_plots(
+        run_id=f"{session_run_id}_greenlee",
+        results={"greenlee": result},
+        plot_types=("time_series",),
+    )
+    for path in plots:
+        assert os.path.isfile(path)
+        attach_plot_to_report(request, path, f"Greenlee Time Series ({session_run_id})")
 
 
 def test_greenlee_opt_in_precision_metrics(

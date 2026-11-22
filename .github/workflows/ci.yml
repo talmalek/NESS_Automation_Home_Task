@@ -60,7 +60,7 @@ jobs:
         with:
           name: ammeter-test-results
           path: |
-            results/report.html
+            results/reports/
             results/runs/
             results/plots/
           retention-days: 14

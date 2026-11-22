@@ -40,6 +40,8 @@ analysis:
 
 result_management:
   save_path: "results/runs"
+  report_dir: "results/reports"
   log_dir: "results/logs"
   log_level: "VERBOSE"  # VERBOSE logs every sample reading; set to INFO in production
+  max_reports: 10       # Keep only the N newest HTML reports / archived runs
   format: "json"

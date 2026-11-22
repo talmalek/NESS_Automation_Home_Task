@@ -125,25 +125,86 @@ def test_result_manager_archive_retrieve_and_compare(tmp_path) -> None:
         rm.load_run("nonexistent_run_id")
 
 
-def test_visualizer_generates_png_plots(tmp_path) -> None:
-    viz = ResultVisualizer(output_dir=str(tmp_path / "plots"))
-    fake_results = {
-        "greenlee": {
-            "ammeter_name": "greenlee",
-            "method": "Ohm's Law",
-            "samples": [
-                {"elapsed_seconds": 0.0, "current_amps": 1.0},
-                {"elapsed_seconds": 0.1, "current_amps": 1.2},
-                {"elapsed_seconds": 0.2, "current_amps": 0.9},
-            ],
-            "statistics": {"mean": 1.033333},
-        }
-    }
-    comparison = {
-        "ranking": [{"ammeter_name": "greenlee", "cv_percent": 14.8}]
-    }
-    plots = viz.generate_plots("test_run_01", fake_results, comparison=comparison)
-    assert len(plots) == 3
+def test_result_manager_retention_prunes_oldest_files(tmp_path) -> None:
+    rm = ResultManager(save_dir=str(tmp_path / "runs"), max_runs=3)
+    created_ids = []
+    for i in range(5):
+        rec = rm.save_run(
+            results={"greenlee": {"statistics": {"mean": float(i + 1), "median": float(i + 1), "std_dev": 0.1}}},
+            run_id=f"run_retention_{i:02d}",
+        )
+        created_ids.append(rec["run_id"])
+    remaining = rm.list_runs()
+    assert len(remaining) == 3
+    remaining_ids = {r["run_id"] for r in remaining}
+    assert set(created_ids[-3:]) == remaining_ids
+
+
+def test_visualizer_generates_png_plots(
+    session_run_id: str,
+    session_results: dict,
+    request: pytest.FixtureRequest,
+) -> None:
+    """Generate real PNG plots from current session or latest archived run_id;
+    fall back to clearly labeled virtual/mock data only if no real runs exist."""
+    from tests.conftest import attach_plot_to_report, attach_text_to_report
+
+    viz = ResultVisualizer(output_dir="results/plots")
+    title_suffix = ""
+
+    if session_results:
+        source_run_id = session_run_id
+        plot_results = session_results
+        source_note = (
+            f"Data source: LIVE PYTEST SESSION | run_id={source_run_id} | "
+            f"ammeters={', '.join(plot_results.keys())}"
+        )
+    else:
+        rm = ResultManager(save_dir="results/runs")
+        archived = rm.list_runs()
+        if archived:
+            latest = rm.load_run(archived[0]["run_id"])
+            source_run_id = latest["run_id"]
+            plot_results = latest["results"]
+            source_note = (
+                f"Data source: LATEST ARCHIVED RUN | run_id={source_run_id} | "
+                f"ammeters={', '.join(plot_results.keys())}"
+            )
+        else:
+            source_run_id = f"{session_run_id}_virtual_mock"
+            title_suffix = "[VIRTUAL / MOCK DATA]"
+            plot_results = {
+                "virtual_ammeter": {
+                    "ammeter_name": "virtual_ammeter",
+                    "method": "Virtual Mock Data (no real run files found)",
+                    "samples": [
+                        {"elapsed_seconds": 0.0, "current_amps": 1.0},
+                        {"elapsed_seconds": 0.1, "current_amps": 1.2},
+                        {"elapsed_seconds": 0.2, "current_amps": 0.9},
+                    ],
+                    "statistics": {"mean": 1.033333},
+                }
+            }
+            source_note = (
+                f"Data source: VIRTUAL / MOCK DATA (no real run files found) | "
+                f"run_id={source_run_id}"
+            )
+
+    comparison = None
+    if len(plot_results) >= 2:
+        comparison = StatisticalAnalyzer().compare_ammeters(plot_results)
+        source_note += f"\nAccuracy Assessment: {comparison['summary']}"
+
+    attach_text_to_report(request, source_note, "Visualizer Data Source")
+
+    plots = viz.generate_plots(
+        source_run_id,
+        plot_results,
+        comparison=comparison,
+        title_suffix=title_suffix,
+    )
+    assert len(plots) >= 2
     for path in plots:
         assert os.path.isfile(path)
         assert os.path.getsize(path) > 0
+        attach_plot_to_report(request, path, os.path.basename(path))

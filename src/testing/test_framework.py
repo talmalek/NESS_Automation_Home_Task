@@ -32,7 +32,10 @@ class AmmeterTestFramework:
         )
         self.sampler = CurrentSampler()
         self.analyzer = StatisticalAnalyzer()
-        self.result_manager = ResultManager(save_dir=rm_cfg.get("save_path", "results/runs"))
+        self.result_manager = ResultManager(
+            save_dir=rm_cfg.get("save_path", "results/runs"),
+            max_runs=rm_cfg.get("max_reports"),
+        )
         self.visualizer = ResultVisualizer(output_dir=viz_cfg.get("output_dir", "results/plots"))
 
     @property

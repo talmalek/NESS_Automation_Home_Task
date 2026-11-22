@@ -7,11 +7,33 @@ from typing import Any, Dict, List, Optional
 
 
 class ResultManager:
-    """Manages unique Run IDs, JSON persistence, historical retrieval, and run diffing."""
+    """Manages unique Run IDs, JSON persistence, historical retrieval, retention, and diffing."""
 
-    def __init__(self, save_dir: str = "results/runs"):
+    def __init__(self, save_dir: str = "results/runs", max_runs: Optional[int] = None):
         self.save_dir = save_dir
+        self.max_runs = max_runs
         os.makedirs(self.save_dir, exist_ok=True)
+
+    @staticmethod
+    def prune_old_files(directory: str, max_files: int, suffix: str = "") -> List[str]:
+        """Keep only the `max_files` most recently modified files matching `suffix`."""
+        if max_files <= 0 or not os.path.isdir(directory):
+            return []
+        candidates = [
+            os.path.join(directory, f)
+            for f in os.listdir(directory)
+            if (not suffix or f.endswith(suffix))
+            and os.path.isfile(os.path.join(directory, f))
+        ]
+        candidates.sort(key=lambda p: (os.path.getmtime(p), p), reverse=True)
+        removed: List[str] = []
+        for old_path in candidates[max_files:]:
+            try:
+                os.remove(old_path)
+                removed.append(old_path)
+            except OSError:
+                continue
+        return removed
 
     @staticmethod
     def generate_run_id(prefix: str = "run") -> str:
@@ -56,6 +78,9 @@ class ResultManager:
         file_path = self._run_path(resolved_id)
         with open(file_path, "w", encoding="utf-8") as fh:
             json.dump(payload, fh, indent=2)
+
+        if self.max_runs is not None:
+            self.prune_old_files(self.save_dir, self.max_runs, suffix=".json")
 
         payload["file_path"] = file_path
         return payload

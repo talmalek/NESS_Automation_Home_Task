@@ -22,6 +22,7 @@ class ResultVisualizer:
         results: Dict[str, Dict[str, Any]],
         comparison: Optional[Dict[str, Any]] = None,
         plot_types: Optional[Iterable[str]] = None,
+        title_suffix: str = "",
     ) -> List[str]:
         os.makedirs(self.output_dir, exist_ok=True)
         requested = list(plot_types) if plot_types is not None else list(self.DEFAULT_PLOT_TYPES)
@@ -34,15 +35,17 @@ class ResultVisualizer:
             return created
 
         if "time_series" in requested:
-            created.append(self._plot_time_series(run_id, valid_results))
+            created.append(self._plot_time_series(run_id, valid_results, title_suffix))
         if "distribution" in requested:
-            created.append(self._plot_distribution(run_id, valid_results))
+            created.append(self._plot_distribution(run_id, valid_results, title_suffix))
         if "summary_comparison" in requested and comparison and comparison.get("ranking"):
-            created.append(self._plot_summary_comparison(run_id, comparison))
+            created.append(self._plot_summary_comparison(run_id, comparison, title_suffix))
 
         return created
 
-    def _plot_time_series(self, run_id: str, results: Dict[str, Dict[str, Any]]) -> str:
+    def _plot_time_series(
+        self, run_id: str, results: Dict[str, Dict[str, Any]], title_suffix: str = ""
+    ) -> str:
         n = len(results)
         fig, axes = plt.subplots(n, 1, figsize=(10, 3.2 * n), sharex=False)
         if n == 1:
@@ -71,7 +74,8 @@ class ResultVisualizer:
             ax.grid(True, alpha=0.3)
             ax.legend(loc="upper right", fontsize=8)
 
-        fig.suptitle(f"Current Measurements Time Series ({run_id})", fontsize=12, fontweight="bold")
+        suffix = f" {title_suffix}" if title_suffix else ""
+        fig.suptitle(f"Current Measurements Time Series ({run_id}){suffix}", fontsize=12, fontweight="bold")
         fig.tight_layout(rect=(0, 0, 1, 0.96))
 
         out_path = os.path.join(self.output_dir, f"{run_id}_time_series.png")
@@ -79,7 +83,9 @@ class ResultVisualizer:
         plt.close(fig)
         return out_path
 
-    def _plot_distribution(self, run_id: str, results: Dict[str, Dict[str, Any]]) -> str:
+    def _plot_distribution(
+        self, run_id: str, results: Dict[str, Dict[str, Any]], title_suffix: str = ""
+    ) -> str:
         n = len(results)
         fig, axes = plt.subplots(1, n, figsize=(4.5 * n, 4.2))
         if n == 1:
@@ -93,7 +99,8 @@ class ResultVisualizer:
             ax.set_xticks([])
             ax.grid(True, axis="y", alpha=0.3)
 
-        fig.suptitle(f"Current Distribution per Ammeter ({run_id})", fontsize=12, fontweight="bold")
+        suffix = f" {title_suffix}" if title_suffix else ""
+        fig.suptitle(f"Current Distribution per Ammeter ({run_id}){suffix}", fontsize=12, fontweight="bold")
         fig.tight_layout(rect=(0, 0, 1, 0.94))
 
         out_path = os.path.join(self.output_dir, f"{run_id}_distribution.png")
@@ -101,7 +108,9 @@ class ResultVisualizer:
         plt.close(fig)
         return out_path
 
-    def _plot_summary_comparison(self, run_id: str, comparison: Dict[str, Any]) -> str:
+    def _plot_summary_comparison(
+        self, run_id: str, comparison: Dict[str, Any], title_suffix: str = ""
+    ) -> str:
         ranking = comparison["ranking"]
         names = [r["ammeter_name"].upper() for r in ranking]
         cvs = [r["cv_percent"] if r["cv_percent"] is not None else 0.0 for r in ranking]
@@ -120,7 +129,8 @@ class ResultVisualizer:
                 fontweight="bold",
             )
 
-        ax.set_title(f"Relative Precision Comparison — CV% (Lower is Better) ({run_id})")
+        suffix = f" {title_suffix}" if title_suffix else ""
+        ax.set_title(f"Relative Precision Comparison — CV% (Lower is Better) ({run_id}){suffix}")
         ax.set_ylabel("Coefficient of Variation (%)")
         ax.grid(True, axis="y", alpha=0.3)
         fig.tight_layout()
