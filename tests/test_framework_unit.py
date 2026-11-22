@@ -1,0 +1,149 @@
+import math
+import os
+
+import pytest
+
+from src.analysis.analyzer import StatisticalAnalyzer
+from src.storage.result_manager import ResultManager
+from src.utils.config import resolve_sampling_params
+from src.utils.logger import TestLogger
+from src.visualization.visualizer import ResultVisualizer
+
+pytestmark = pytest.mark.unit
+
+
+def test_sampling_resolver_all_two_of_three_pairs() -> None:
+    s1 = resolve_sampling_params(measurements_count=20, total_duration_seconds=4.0)
+    assert s1.sampling_frequency_hz == 5.0
+
+    s2 = resolve_sampling_params(total_duration_seconds=4.0, sampling_frequency_hz=5.0)
+    assert s2.measurements_count == 20
+
+    s3 = resolve_sampling_params(measurements_count=20, sampling_frequency_hz=5.0)
+    assert s3.total_duration_seconds == 4.0
+
+
+def test_sampling_resolver_rejects_conflicts_and_invalid_inputs() -> None:
+    with pytest.raises(ValueError, match="Inconsistent"):
+        resolve_sampling_params(
+            measurements_count=5, total_duration_seconds=2.0, sampling_frequency_hz=10.0
+        )
+    with pytest.raises(ValueError, match="at least 2"):
+        resolve_sampling_params(measurements_count=5)
+    with pytest.raises(ValueError, match="positive integer"):
+        resolve_sampling_params(measurements_count=0, total_duration_seconds=1.0)
+
+
+def test_logger_verbose_vs_info_filtering(tmp_path) -> None:
+    v_log = TestLogger("unit_verbose", log_dir=str(tmp_path), level="VERBOSE")
+    v_log.info("lifecycle event")
+    v_log.verbose("sample reading 1.23 A")
+
+    with open(v_log.log_file, "r", encoding="utf-8") as fh:
+        v_content = fh.read()
+    assert "| INFO" in v_content
+    assert "| VERBOSE" in v_content
+
+    i_log = TestLogger("unit_info", log_dir=str(tmp_path), level="INFO")
+    i_log.info("lifecycle event")
+    i_log.verbose("hidden sample reading")
+
+    with open(i_log.log_file, "r", encoding="utf-8") as fh:
+        i_content = fh.read()
+    assert "| INFO" in i_content
+    assert "| VERBOSE" not in i_content
+
+
+def test_statistical_analyzer_core_and_precision_metrics() -> None:
+    analyzer = StatisticalAnalyzer()
+    values = [10.0, 20.0, 30.0, 40.0, 50.0]
+
+    core = analyzer.analyze(values, include_precision_metrics=False)
+    assert core["count"] == 5
+    assert core["mean"] == 30.0
+    assert core["median"] == 30.0
+    assert core["min"] == 10.0
+    assert core["max"] == 50.0
+    assert math.isclose(core["std_dev"], 15.811388, rel_tol=1e-5)
+    assert "cv" not in core
+
+    full = analyzer.analyze(values, include_precision_metrics=True)
+    assert full["iqr"] == 20.0
+    assert math.isclose(full["cv"], 15.811388 / 30.0, rel_tol=1e-4)
+    assert full["ci95_low"] < 30.0 < full["ci95_high"]
+
+    with pytest.raises(ValueError):
+        analyzer.analyze([])
+
+
+def test_cross_ammeter_accuracy_ranking() -> None:
+    analyzer = StatisticalAnalyzer()
+    fake_results = {
+        "steady": {
+            "ammeter_name": "steady",
+            "method": "Stable Method",
+            "samples": [{"current_amps": v} for v in [10.0, 10.1, 9.9, 10.0, 10.05]],
+        },
+        "noisy": {
+            "ammeter_name": "noisy",
+            "method": "Noisy Method",
+            "samples": [{"current_amps": v} for v in [1.0, 50.0, 2.0, 80.0, 5.0]],
+        },
+    }
+    comp = analyzer.compare_ammeters(fake_results)
+    assert comp["most_reliable"] == "steady"
+    assert comp["ranking"][0]["rank"] == 1
+    assert comp["ranking"][0]["ammeter_name"] == "steady"
+
+
+def test_result_manager_archive_retrieve_and_compare(tmp_path) -> None:
+    rm = ResultManager(save_dir=str(tmp_path / "runs"))
+    run_a = rm.save_run(
+        results={
+            "greenlee": {
+                "statistics": {"mean": 1.0, "median": 1.0, "std_dev": 0.2},
+            }
+        }
+    )
+    run_b = rm.save_run(
+        results={
+            "greenlee": {
+                "statistics": {"mean": 1.5, "median": 1.4, "std_dev": 0.3},
+            }
+        }
+    )
+
+    loaded = rm.load_run(run_a["run_id"])
+    assert loaded["run_id"] == run_a["run_id"]
+    assert len(rm.list_runs()) == 2
+
+    diff = rm.compare_runs(run_a["run_id"], run_b["run_id"])
+    assert diff["ammeter_diffs"]["greenlee"]["mean_delta"] == 0.5
+    assert diff["ammeter_diffs"]["greenlee"]["mean_pct_change"] == 50.0
+
+    with pytest.raises(FileNotFoundError):
+        rm.load_run("nonexistent_run_id")
+
+
+def test_visualizer_generates_png_plots(tmp_path) -> None:
+    viz = ResultVisualizer(output_dir=str(tmp_path / "plots"))
+    fake_results = {
+        "greenlee": {
+            "ammeter_name": "greenlee",
+            "method": "Ohm's Law",
+            "samples": [
+                {"elapsed_seconds": 0.0, "current_amps": 1.0},
+                {"elapsed_seconds": 0.1, "current_amps": 1.2},
+                {"elapsed_seconds": 0.2, "current_amps": 0.9},
+            ],
+            "statistics": {"mean": 1.033333},
+        }
+    }
+    comparison = {
+        "ranking": [{"ammeter_name": "greenlee", "cv_percent": 14.8}]
+    }
+    plots = viz.generate_plots("test_run_01", fake_results, comparison=comparison)
+    assert len(plots) == 3
+    for path in plots:
+        assert os.path.isfile(path)
+        assert os.path.getsize(path) > 0

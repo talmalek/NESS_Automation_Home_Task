@@ -28,6 +28,8 @@ def parse_log_level(level: Union[int, str]) -> int:
 
 
 class TestLogger:
+    __test__ = False  # Prevent pytest from mistaking this helper for a test class
+
     def __init__(
         self,
         test_name: str,
