@@ -18,6 +18,9 @@ from src.utils.config import get_ammeter_config, load_config
 from src.utils.logger import TestLogger
 
 
+AMMETER_MARKERS = ("greenlee", "entes", "circutor")
+
+
 def _load_result_mgmt_cfg() -> Dict[str, Any]:
     try:
         return load_config("config/config.yaml").get("result_management", {}) or {}
@@ -36,6 +39,7 @@ def pytest_configure(config: pytest.Config) -> None:
     config._ammeter_report_dir = report_dir  # type: ignore[attr-defined]
     config._ammeter_max_reports = int(rm_cfg.get("max_reports", 10))  # type: ignore[attr-defined]
     config._ammeter_session_results = {}  # type: ignore[attr-defined]
+    config._failed_sanity = set()  # type: ignore[attr-defined]
 
     # Dynamically set unique HTML1 report filename unless caller explicitly passed --report
     existing_reports = getattr(config.option, "report", None)
@@ -45,14 +49,41 @@ def pytest_configure(config: pytest.Config) -> None:
 
 
 def pytest_collection_modifyitems(items: List[pytest.Item]) -> None:
-    """Ensure the combined visualizer report test always runs last in the session."""
-    items.sort(key=lambda item: 1 if "visualizer" in item.name else 0)
+    """Order tests: sanity first -> functional/unit/negative -> visualizer -> cleanup."""
+    def _priority(item: pytest.Item) -> int:
+        if item.get_closest_marker("sanity") is not None:
+            return 0
+        if "visualizer" in item.name:
+            return 2
+        if item.get_closest_marker("cleanup") is not None:
+            return 3
+        return 1
+
+    items.sort(key=_priority)
+
+
+def pytest_runtest_setup(item: pytest.Item) -> None:
+    """Skip dependent ammeter tests if that ammeter's sanity check failed."""
+    if item.get_closest_marker("sanity") is not None:
+        return
+    failed_sanity = getattr(item.config, "_failed_sanity", set())
+    for ammeter in AMMETER_MARKERS:
+        if ammeter in failed_sanity and item.get_closest_marker(ammeter) is not None:
+            pytest.skip(
+                f"Skipped: '{ammeter}' sanity test failed — skipping dependent sampling/precision tests."
+            )
 
 
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo) -> Generator:
     outcome = yield
     report = outcome.get_result()
+    if report.failed and report.when in ("setup", "call"):
+        if item.get_closest_marker("sanity") is not None:
+            failed_sanity = getattr(item.config, "_failed_sanity", set())
+            for ammeter in AMMETER_MARKERS:
+                if item.get_closest_marker(ammeter) is not None:
+                    failed_sanity.add(ammeter)
     if report.when == "call":
         extras = getattr(item, "_html_extras", [])
         if extras:

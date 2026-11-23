@@ -1,8 +1,8 @@
 # Ammeter Testing Framework — Embedded Systems QA Automation
 
-A modular, configuration-driven Python testing framework for evaluating embedded current measurement ammeter emulators (**Greenlee**, **ENTES**, and **CIRCUTOR**).
+A modular, configuration-driven Python testing framework for evaluating embedded current measurement ammeter emulators (**Greenlee**, **ENTES**, and **CIRCUTOR**), built with strict SUT immutability, drift-compensated sampling, opt-in statistical precision analysis, self-contained HTML1 visual reports, and GitHub Actions CI.
 
-Full system requirements and architecture specification: [docs/SDR.md](docs/SDR.md).
+Full system design specification: [docs/SDR.md](docs/SDR.md).
 
 ---
 
@@ -16,24 +16,79 @@ flowchart LR
     SM --> CL
     CL <--> EM[Ammeter Emulators<br/>Greenlee :5001 / ENTES :5002 / CIRCUTOR :5003]
     FW --> AN[StatisticalAnalyzer<br/>Core + Opt-In Precision]
-    AN --> RM[ResultManager<br/>JSON Archive + History Diff]
+    AN --> RM[ResultManager<br/>JSON Archive + Linked Retention]
     AN --> VZ[ResultVisualizer<br/>Headless Matplotlib PNGs]
     FW --> LG[TestLogger<br/>VERBOSE / INFO]
 ```
 
-### Key Design Decisions
-1. **Strict SUT Immutability**: Vendor emulator implementations (`Ammeters/Greenlee_Ammeter.py`, `Ammeters/Entes_Ammeter.py`, `Ammeters/Circutor_Ammeter.py`) were **never modified**. Only minimal infrastructure fixes were applied to `base_ammeter.py`, `client.py`, and `main.py` (documented below).
-2. **KISS + Scalable OOP Client (`src/testing/ammeter_client.py`)**: All TCP emulators share the same wire contract (`command -> float`). `BaseAmmeterClient` (ABC) defines the interface, and a single config-driven `TcpAmmeterClient` serves all TCP ammeters — adding a 4th/5th TCP ammeter requires **zero Python code changes** (only a YAML entry). Non-TCP protocols can subclass `BaseAmmeterClient` cleanly.
-3. **2-of-3 Sampling Resolver (`src/utils/config.py`)**: Because `count = duration × frequency` is over-constrained, any 2 of (`measurements_count`, `total_duration_seconds`, `sampling_frequency_hz`) automatically derive the 3rd, and providing all 3 validates consistency (`ValueError` on conflict).
-4. **Shared Analytics + Opt-In Precision Metrics (`src/analysis/analyzer.py`)**: Core metrics (`mean`, `median`, `std_dev`, `min`, `max`) run by default with zero per-ammeter duplication. Calibration/precision metrics (`CV`, `IQR`, `CI95`, `consistency_rating`) are **opt-in** via `include_precision_metrics=True` (or `--precision`) and used for cross-ammeter reliability ranking.
-5. **SUT vs. Framework Log Separation (`src/utils/logger.py`)**: Emulator `stdout` prints are never mixed into test logs. A custom `VERBOSE` level (`15`) logs every individual sample reading (`elapsed`, `current_amps`); controlled via `result_management.log_level` in `config/config.yaml` (`VERBOSE` in dev/QA, switchable to `INFO` in production).
-6. **Modular `pytest` Suites + Per-Run HTML1 Reports with Embedded Plots & Retention**: Per-ammeter test modules (`test_greenlee.py`, `test_entes.py`, `test_circutor.py`) with lazy fixtures start only the requested emulator(s). Every run generates a unique `results/reports/report_<run_id>.html` with real PNG plots embedded inline (falling back to clearly labeled `[VIRTUAL / MOCK DATA]` only if no real run exists) and enforces configurable `max_reports` retention (default `10`).
+---
+
+## Key Design Decisions
+
+1. **Strict SUT Immutability**: Vendor emulator implementations (`Ammeters/Greenlee_Ammeter.py`, `Ammeters/Entes_Ammeter.py`, `Ammeters/Circutor_Ammeter.py`) were **never modified**. Only minimal, documented infrastructure fixes were applied to `base_ammeter.py`, `client.py`, and `main.py` (see [Bug-Fix Log](#starter-code-bug-fix-log)).
+2. **KISS + Scalable OOP Client (`src/testing/ammeter_client.py`)**: All TCP emulators share the same wire contract (`command -> float`). `BaseAmmeterClient` (ABC) defines the contract, and a single config-driven `TcpAmmeterClient` serves all TCP ammeters — adding a 4th or 5th TCP ammeter requires **zero Python code changes**, only a YAML entry in `config/config.yaml`. Non-TCP protocols (Serial, Modbus) can subclass `BaseAmmeterClient` cleanly.
+3. **2-of-3 Sampling Resolver (`src/utils/config.py`)**: Because `count = duration × frequency` is mathematically over-constrained, providing any 2 of (`measurements_count`, `total_duration_seconds`, `sampling_frequency_hz`) derives the 3rd automatically, and providing all 3 validates consistency (`ValueError` on conflict).
+4. **Shared Analytics + Opt-In Precision Metrics (`src/analysis/analyzer.py`)**: Core metrics (`mean`, `median`, `std_dev`, `min`, `max`) run by default with zero per-ammeter duplication. Calibration/precision metrics (`CV`, `IQR`, `CI95`, `consistency_rating`) are **opt-in** via `include_precision_metrics=True` (or `--precision`) and power cross-ammeter reliability ranking.
+5. **INFO vs. VERBOSE Configurable Logging (`src/utils/logger.py`)**:
+   - Emulator `stdout` prints belong to the SUT and are never mixed into framework logs.
+   - A custom **`VERBOSE` level (`15`, between `DEBUG=10` and `INFO=20`)** logs every individual sample reading (`elapsed`, `current_amps`) for QA auditing and math verification, while **`INFO`** logs only test lifecycle events and final statistics.
+   - Controlled via `result_management.log_level` in `config/config.yaml` (`VERBOSE` in dev/QA; switchable to `INFO` in production/CI with zero code changes to prevent log bloat):
+   ```text
+   # log_level: VERBOSE (QA / Debugging — full per-sample audit trail)
+   INFO     | Starting test for 'greenlee': count=8, duration=0.400s, freq=20.00Hz
+   VERBOSE  | [greenlee] Sample 1/8 | elapsed=0.000s | current=0.057033 A
+   VERBOSE  | [greenlee] Sample 2/8 | elapsed=0.055s | current=0.011694 A
+   INFO     | Stats 'greenlee': mean=0.1012A, median=0.1105A, std=0.0641A, min=0.0117A, max=0.1935A, cv=63.32%, iqr=0.0905A, ci95=[0.0476, 0.1548]A, rating=low
+
+   # log_level: INFO (Production / CI — compact summary only)
+   INFO     | Starting test for 'greenlee': count=8, duration=0.400s, freq=20.00Hz
+   INFO     | Stats 'greenlee': mean=0.1012A, median=0.1105A, std=0.0641A, min=0.0117A, max=0.1935A
+   ```
+6. **Per-Ammeter Sanity Fail-Fast Gate (`tests/conftest.py`)**:
+   - `pytest_collection_modifyitems` guarantees `@pytest.mark.sanity` tests always execute **first** for each ammeter.
+   - If an ammeter's sanity check fails (e.g., unreachable or out-of-range), `pytest_runtest_setup` **automatically skips** its dependent `sampling_and_core_stats` and `opt_in_precision_metrics` tests (`"Skipped: '<ammeter>' sanity test failed"`) — avoiding wasted execution and cascading false failures.
+7. **Real-Data Visualizer & Self-Contained HTML1 Reports (`pytest-reporter-html1`)**:
+   - Every `pytest` run creates a unique local-time report `results/reports/report_<run_id>.html` with real PNG plots embedded inline (no external Allure server required).
+   - The combined visualizer test always runs after all ammeter tests, pulling live session data (or the latest archived run in `results/runs/`), and only falls back to clearly labeled **`[VIRTUAL / MOCK DATA]`** if no real run files exist.
+8. **Configurable Artifact Retention & Standalone Cleanup Test (`pytest -m cleanup`)**:
+   - `result_management.max_reports` in `config/config.yaml` (default `10`) controls how many latest reports to keep.
+   - Running `pytest -m cleanup` executes `test_standalone_cleanup_old_reports_and_artifacts`, which prunes reports older than the latest `X` runs **together with all their linked PNG plots and JSON run files** across `results/reports/`, `results/plots/`, and `results/runs/`.
+
+---
+
+## Visual Reports & Screenshots
+
+### 1. Self-Contained HTML1 Test Report (`results/reports/report_<run_id>.html`)
+Every test run generates a single portable HTML1 report showing pass/fail status, markers, fixtures, captured logs, precision summaries, and embedded PNG charts:
+
+![HTML1 Test Report Preview](docs/images/html1_report_preview.png)
+
+### 2. Current Measurements Time Series (`time_series.png`)
+Tracks measured current (A) over elapsed time (s) for each ammeter alongside its dashed mean reference line:
+
+![Current Measurements Time Series](docs/images/time_series.png)
+
+### 3. Current Distribution Boxplot (`distribution.png`)
+Displays per-ammeter spread on independent scales with **IQR (Q1–Q3, middle 50%)**, **Median (Q2)**, **Mean (green diamond)**, **Whiskers (Min–Max / 1.5×IQR)**, and outliers:
+
+![Current Distribution per Ammeter](docs/images/distribution.png)
+
+### 4. Cross-Ammeter Precision Ranking (`summary_comparison.png`)
+Compares scale-independent **Coefficient of Variation (`CV% = std_dev / mean`, lower is more consistent)** across ammeters:
+
+![Relative Precision Comparison CV%](docs/images/summary_comparison.png)
+
+### Cross-Ammeter Accuracy Findings
+Because each emulator operates on a different physical scale (`0.001–0.1A` CIRCUTOR, `0.01–100A` Greenlee, `5–200A` ENTES), scale-independent **CV%** ranks relative precision fairly:
+- **#1 CIRCUTOR** (Rogowski 10-sample integration): consistently achieves the lowest `CV` (~`40%–56%`) because summing 10 voltage samples averages out random variance.
+- **#2 ENTES** (Hall Effect `B × K`): moderate-to-high dispersion (~`60%` CV).
+- **#3 Greenlee** (Ohm's Law `V / R`): highest relative dispersion (~`80%+` CV) due to heavy right-skew spikes when `R → 0.1Ω`.
 
 ---
 
 ## Setup & Installed Dependencies
 
-Python **3.9+** compatible (tested on Python 3.9.6 macOS and Python 3.11 Ubuntu CI).
+Python **3.9+** compatible (verified on Python 3.9.6 macOS and Python 3.11 Ubuntu CI).
 
 ```bash
 python3 -m venv .venv
@@ -51,7 +106,7 @@ pip install -r requirements.txt
 | `seaborn>=0.11.0` | Starter dependency preserved for statistical plotting |
 | `pandas>=1.3.0` | Starter dependency preserved for tabular analysis |
 | `pytest>=7.0.0` | Modular test runner with marker-based selection |
-| `pytest-reporter-html1>=0.9.0` | Single-file HTML test report (`results/report.html`) |
+| `pytest-reporter-html1>=0.9.0` | Single-file HTML1 test report with inline PNG plots |
 
 ---
 
@@ -79,17 +134,16 @@ python run_suite.py --list-runs
 python run_suite.py --compare-runs <RUN_ID_A> <RUN_ID_B>
 ```
 
-### 3. Run Modular `pytest` Suite & HTML Report
-Every `pytest` invocation generates a unique, self-contained HTML1 report under `results/reports/report_<run_id>.html` with embedded real PNG plots and automatic `max_reports` retention (default `10`).
-
+### 3. Run Modular `pytest` Suites, Visualizer & Standalone Cleanup
 ```bash
-# Run full suite (22 tests: sanity, per-ammeter functional, unit, negative/error simulation)
+# Run full suite (22 tests: sanity -> functional/unit/negative -> visualizer -> cleanup)
 pytest -v
 
 # Pre-flight fail-fast sanity gate across all ammeters
 pytest -m sanity -x -v
 
-# Run a single ammeter suite (lazy fixtures start ONLY that emulator)
+# Run a single ammeter suite (lazy fixtures start ONLY that emulator;
+# if sanity fails, sampling & precision tests for that ammeter skip automatically)
 pytest -m greenlee -v
 pytest -m entes -v
 pytest -m circutor -v
@@ -99,6 +153,10 @@ pytest -m "sanity and greenlee" -v
 pytest -m "greenlee or entes" -v
 pytest -m unit -v
 pytest -m negative -v
+
+# Standalone artifact cleanup — keeps only the newest `max_reports` (config.yaml)
+# HTML reports and deletes older reports together with their linked PNG plots & JSON runs
+pytest -m cleanup -v
 ```
 
 ---
@@ -112,12 +170,12 @@ Each ammeter has its own isolated suite and pytest marker (`greenlee`, `entes`, 
 
 | Test (per ammeter) | Markers | What It Verifies & Why | Assignment Requirement |
 | :--- | :--- | :--- | :--- |
-| `test_<ammeter>_sanity` | `<ammeter>`, `sanity` | Pre-flight TCP reachability and valid physical range (`Greenlee: 0.01–100A`, `ENTES: 5–200A`, `CIRCUTOR: 0.001–0.1A`). Used as a fail-fast gate (`-m sanity -x`) before running the full suite. | Core #1 (Unified API) |
+| `test_<ammeter>_sanity` | `<ammeter>`, `sanity` | Pre-flight TCP reachability and valid physical range (`Greenlee: 0.01–100A`, `ENTES: 5–200A`, `CIRCUTOR: 0.001–0.1A`). Runs first; if it fails, dependent tests for that ammeter are automatically skipped. | Core #1 (Unified API) |
 | `test_<ammeter>_sampling_and_core_stats` | `<ammeter>` | Collects 8 timed samples, validates exact sample count, zero errors, core metrics (`mean`, `median`, `std_dev`, `min`, `max`), confirms precision metrics are off by default, and embeds the real time-series PNG plot into the HTML1 report. | Core #2 (Sampling) & #3 (Result Analysis) |
-| `test_<ammeter>_opt_in_precision_metrics` | `<ammeter>` | Enables `include_precision_metrics=True`, validates `CV`, `IQR`, `CI95`, and `consistency_rating`, and embeds real time-series + boxplot PNGs and summary into the HTML1 report. | Bonus #5 (Accuracy & Precision) |
+| `test_<ammeter>_opt_in_precision_metrics` | `<ammeter>` | Enables `include_precision_metrics=True`, validates `CV`, `IQR`, `CI95`, and `consistency_rating`, and embeds real time-series + boxplot PNGs and precision summary into the HTML1 report. | Bonus #5 (Accuracy & Precision) |
 
-### Framework Unit Tests (`tests/test_framework_unit.py` — marker: `unit`)
-Live emulator values are stochastic; offline deterministic unit tests guarantee exact math, config safety, archiving, and visualization:
+### Framework Unit & Maintenance Tests (`tests/test_framework_unit.py` — markers: `unit`, `cleanup`)
+Live emulator values are stochastic; offline deterministic unit tests guarantee exact math, config safety, archiving, visualization, and artifact retention:
 
 | Test | What It Verifies & Why | Assignment Requirement |
 | :--- | :--- | :--- |
@@ -127,8 +185,8 @@ Live emulator values are stochastic; offline deterministic unit tests guarantee 
 | `test_statistical_analyzer_core_and_precision_metrics` | Deterministic math verification on `[10, 20, 30, 40, 50]` for exact core + opt-in precision metrics and empty-input error handling. | Core #3 + Bonus #5 |
 | `test_cross_ammeter_accuracy_ranking` | Verifies scale-independent `CV` ranking identifies the more consistent ammeter (`steady` over `noisy`). | Bonus #5 (Reliability Ranking) |
 | `test_result_manager_archive_retrieve_and_compare` | Verifies unique `run_id`, JSON persistence, reload by ID, historical listing, `compare_runs()` deltas, and `FileNotFoundError` on unknown IDs. | Core #4 (Result Management) |
-| `test_standalone_cleanup_old_reports_and_artifacts` | Prunes linked HTML reports, PNG plots, and JSON runs older than `max_reports` (`@pytest.mark.cleanup`) so disk usage stays bounded. | QA Engineering Enhancement |
-| `test_visualizer_generates_png_plots` | Always runs last in the session; generates combined `time_series`, `distribution` (with mean marker + legend), and `summary_comparison` PNGs from real session/archived data (falling back to clearly labeled `[VIRTUAL / MOCK DATA]` only if no real run exists) and embeds them in the HTML1 report. | Bonus #3 (Visualization) |
+| `test_visualizer_generates_png_plots` | Runs after all ammeter tests; generates combined `time_series`, `distribution` (with mean marker + legend), and `summary_comparison` PNGs from real session/archived data (falling back to clearly labeled `[VIRTUAL / MOCK DATA]` only if no real run exists) and embeds them in the HTML1 report. | Bonus #3 (Visualization) |
+| `test_standalone_cleanup_old_reports_and_artifacts` | Standalone `@pytest.mark.cleanup` maintenance test: retains only the latest `max_reports` (configured in `config/config.yaml`) and removes older HTML reports along with their linked PNG plots and JSON runs. | QA Engineering Enhancement |
 
 ### Error Simulation & Negative Tests (`tests/test_error_simulation.py` — marker: `negative`)
 Validates fault tolerance under simulated hardware anomalies and real TCP/protocol failures:
@@ -159,25 +217,10 @@ Per specification: *"if you get an error in the code, please fix it and explain 
 
 ---
 
-## Generated Reports & Accuracy Findings
-
-Generated runtime artifacts under `results/` are excluded from Git via `.gitignore` to keep the repository clean, and are produced automatically on every local run and uploaded as downloadable Artifacts in GitHub Actions:
-- **HTML1 Test Reports**: `results/reports/report_<run_id>.html` (self-contained with embedded PNG plots, local-time `run_id`, and `max_reports: 10` retention)
-- **Archived JSON Runs**: `results/runs/<run_id>.json` (metadata, raw timestamped samples, statistics, and cross-ammeter comparison)
-- **Visual Reports**: `results/plots/*_time_series.png`, `results/plots/*_distribution.png`, `results/plots/*_summary_comparison.png`
-
-### Cross-Ammeter Precision Observation
-Because each emulator operates on a different physical scale (`0.001–0.1A` CIRCUTOR, `0.01–100A` Greenlee, `5–200A` ENTES), scale-independent **Coefficient of Variation (`CV = std_dev / mean`)** is used to assess relative precision:
-- **#1 CIRCUTOR** (Rogowski 10-sample integration): consistently achieves the lowest `CV` (~`48%–56%`) because summing 10 voltage samples averages out random variance.
-- **#2 ENTES** (Hall Effect `B × K`): moderate-to-high dispersion (~`61%` CV).
-- **#3 Greenlee** (Ohm's Law `V / R`): highest relative dispersion (~`80%+` CV) due to heavy right-skew spikes when `R → 0.1Ω`.
-
----
-
 ## CI/CD (GitHub Actions)
 
-Workflow: `.github/workflows/ci.yml`
+Workflow: [.github/workflows/ci.yml](.github/workflows/ci.yml)
 1. Runs `pytest -m sanity -x -v` as a fail-fast pre-flight gate.
 2. Runs full `pytest -v` (or a selected marker via manual `workflow_dispatch`).
 3. Executes `python run_suite.py --count 15 --duration 1.0 --precision --log-level INFO`.
-4. Uploads `results/report.html`, `results/runs/`, and `results/plots/` as downloadable workflow artifacts.
+4. Uploads `results/reports/`, `results/runs/`, and `results/plots/` as downloadable workflow artifacts (`results/` itself stays excluded from Git via `.gitignore`).
