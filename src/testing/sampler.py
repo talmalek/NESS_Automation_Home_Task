@@ -108,7 +108,7 @@ class CurrentSampler:
         samples: List[Sample] = []
         errors: List[SamplingError] = []
 
-        started_at = datetime.now(timezone.utc).isoformat()
+        started_at = datetime.now().astimezone().isoformat()
         start_perf = time.perf_counter()
 
         for idx in range(count):
@@ -117,7 +117,7 @@ class CurrentSampler:
             if sleep_for > 0:
                 time.sleep(sleep_for)
 
-            now_iso = datetime.now(timezone.utc).isoformat()
+            now_iso = datetime.now().astimezone().isoformat()
             elapsed = time.perf_counter() - start_perf
 
             try:
@@ -157,7 +157,7 @@ class CurrentSampler:
                 )
 
         actual_duration = time.perf_counter() - start_perf
-        completed_at = datetime.now(timezone.utc).isoformat()
+        completed_at = datetime.now().astimezone().isoformat()
 
         return SamplingResult(
             ammeter_name=client.name,

@@ -37,7 +37,7 @@ class ResultManager:
 
     @staticmethod
     def generate_run_id(prefix: str = "run") -> str:
-        ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
         short_id = uuid.uuid4().hex[:8]
         return f"{prefix}_{ts}_{short_id}"
 
@@ -57,7 +57,7 @@ class ResultManager:
         """Persist a test run with metadata, samples, statistics, and optional comparison."""
         os.makedirs(self.save_dir, exist_ok=True)
         resolved_id = run_id or self.generate_run_id()
-        saved_at = datetime.now(timezone.utc).isoformat()
+        saved_at = datetime.now().astimezone().isoformat()
 
         run_metadata: Dict[str, Any] = {
             "python_version": platform.python_version(),
