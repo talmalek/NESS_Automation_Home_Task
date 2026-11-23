@@ -4,7 +4,7 @@ import pytest
 
 from src.testing.test_framework import AmmeterTestFramework
 from src.visualization.visualizer import ResultVisualizer
-from tests.conftest import attach_plot_to_report
+from tests.conftest import attach_plot_to_report, attach_text_to_report
 
 pytestmark = pytest.mark.greenlee
 
@@ -51,7 +51,10 @@ def test_greenlee_sampling_and_core_stats(
 
 
 def test_greenlee_opt_in_precision_metrics(
-    greenlee_emulator, framework: AmmeterTestFramework
+    greenlee_emulator,
+    framework: AmmeterTestFramework,
+    session_run_id: str,
+    request: pytest.FixtureRequest,
 ) -> None:
     result = framework.run_test(
         "greenlee",
@@ -63,3 +66,22 @@ def test_greenlee_opt_in_precision_metrics(
     assert stats is not None
     assert "cv" in stats and "iqr" in stats and "ci95_low" in stats
     assert stats["ci95_low"] <= stats["mean"] <= stats["ci95_high"]
+
+    attach_text_to_report(
+        request,
+        (
+            f"Greenlee Precision Metrics ({session_run_id})\n"
+            f"mean={stats['mean']}A | median={stats['median']}A | std_dev={stats['std_dev']}A\n"
+            f"CV={stats['cv_percent']}% | IQR={stats['iqr']}A | "
+            f"CI95=[{stats['ci95_low']}, {stats['ci95_high']}]A | rating={stats['consistency_rating']}"
+        ),
+        "Precision Metrics Summary",
+    )
+    plots = ResultVisualizer().generate_plots(
+        run_id=f"{session_run_id}_greenlee_precision",
+        results={"greenlee": result},
+        plot_types=("time_series", "distribution"),
+    )
+    for path in plots:
+        assert os.path.isfile(path)
+        attach_plot_to_report(request, path, os.path.basename(path))
