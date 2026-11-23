@@ -216,10 +216,20 @@ Per specification: *"if you get an error in the code, please fix it and explain 
 
 ---
 
-## CI/CD (GitHub Actions)
+## CI/CD (GitHub Actions — Executable On Demand with Artifacts)
 
 Workflow: [.github/workflows/ci.yml](.github/workflows/ci.yml)
+
+### How Reviewers Can Run It & Download Reports
+1. Open the **Actions** tab → select **Ammeter Testing CI**.
+2. Click **Run workflow** and choose a test suite (`all`, `sanity`, `greenlee`, `entes`, `circutor`, `unit`, `negative`, or `cleanup`). Each run displays its selected suite in the run title (e.g. `Ammeter Testing CI - Suite all`).
+3. Open the completed run and download the **`ammeter-test-results`** artifact at the bottom of the page — it contains:
+   - `results/reports/report_<run_id>.html` (self-contained HTML1 report with inline PNG plots)
+   - `results/runs/<run_id>.json` (archived metadata, raw samples, statistics, and accuracy ranking)
+   - `results/plots/*.png` (time-series, distribution boxplot, and CV% comparison charts)
+
+### Automated Pipeline Steps
 1. Runs `pytest -m sanity -x -v` as a fail-fast pre-flight gate.
-2. Runs full `pytest -v` (or a selected marker via manual `workflow_dispatch`).
+2. Runs full `pytest -v` (or the selected suite marker via `workflow_dispatch`).
 3. Executes `python run_suite.py --count 15 --duration 1.0 --precision --log-level INFO`.
-4. Uploads `results/reports/`, `results/runs/`, and `results/plots/` as downloadable workflow artifacts (`results/` itself stays excluded from Git via `.gitignore`).
+4. Uploads `results/reports/`, `results/runs/`, and `results/plots/` as downloadable artifacts (`results/` itself stays excluded from Git via `.gitignore`).

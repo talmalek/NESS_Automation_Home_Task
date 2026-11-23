@@ -1,4 +1,5 @@
 name: Ammeter Testing CI
+run-name: "Ammeter Testing CI - Suite ${{ inputs.suite || 'all' }}"
 
 on:
   push:
@@ -20,6 +21,7 @@ on:
           - circutor
           - unit
           - negative
+          - cleanup
 
 jobs:
   test:
