@@ -14,6 +14,7 @@
   - `main.py` (fix commands/ports so starter script works per spec).
 - **Principle — KISS**: Fulfill core + bonus requirements cleanly. No over-engineering, no extra web frameworks. (Optional HTML debug UI is out of scope for now.)
 - **Gate-by-Gate Workflow**: Complete ONE gate at a time, verify it works, confirm no unintended changes, then wait for user approval before the next gate.
+- **No Auto-Push**: NEVER run `git commit` or `git push` until the user explicitly tests and approves the changes.
 
 ## 2. Core Architecture (OOP, KISS & Scalable)
 - **Config-Driven OOP Ammeter Client (`src/testing/ammeter_client.py`)**:

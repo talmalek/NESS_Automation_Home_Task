@@ -15,6 +15,115 @@ class ResultManager:
         os.makedirs(self.save_dir, exist_ok=True)
 
     @staticmethod
+    def extract_run_id(report_filename: str) -> str:
+        """Extract run_id from report filename (e.g. report_<run_id>.html)."""
+        base = os.path.basename(report_filename)
+        if base.endswith(".html"):
+            base = base[:-5]
+        if base.startswith("report_"):
+            return base[7:]
+        return base
+
+    @staticmethod
+    def prune_linked_artifacts(
+        max_reports: int = 10,
+        reports_dir: str = "results/reports",
+        plots_dir: str = "results/plots",
+        runs_dir: str = "results/runs",
+        logger: Optional[Any] = None,
+    ) -> Dict[str, List[str]]:
+        """
+        Retain only the last `max_reports` executions across reports, plots, and runs.
+
+        Workflow:
+        1. Scan reports_dir for .html reports.
+        2. Sort reports by mtime descending (newest first).
+        3. Identify all candidate reports older than max_reports.
+        4. For each candidate report:
+           a. Extract its run_id.
+           b. Delete the report file.
+           c. Delete all plots in plots_dir related to this run_id.
+           d. Delete all run records in runs_dir related to this run_id.
+        5. Print / log all removed files.
+        """
+        removed: Dict[str, List[str]] = {
+            "reports": [],
+            "plots": [],
+            "runs": [],
+        }
+
+        if max_reports <= 0 or not os.path.isdir(reports_dir):
+            return removed
+
+        report_files = [
+            os.path.join(reports_dir, f)
+            for f in os.listdir(reports_dir)
+            if f.endswith(".html") and os.path.isfile(os.path.join(reports_dir, f))
+        ]
+        report_files.sort(key=lambda p: (os.path.getmtime(p), p), reverse=True)
+
+        candidates = report_files[max_reports:]
+        log_fn = logger.info if (logger and hasattr(logger, "info")) else print
+
+        if not candidates:
+            log_fn(
+                f"Artifact cleanup: Found {len(report_files)} report(s) (<= max {max_reports}). "
+                "No older files to prune."
+            )
+            return removed
+
+        log_fn(
+            f"Artifact cleanup: Found {len(candidates)} candidate report(s) older than the last "
+            f"{max_reports} to prune."
+        )
+
+        for report_path in candidates:
+            fname = os.path.basename(report_path)
+            run_id = ResultManager.extract_run_id(fname)
+
+            # 1. Delete candidate report
+            try:
+                os.remove(report_path)
+                removed["reports"].append(report_path)
+            except OSError as err:
+                log_fn(f"Failed to remove report {report_path}: {err}")
+
+            # 2. Delete related plots
+            if run_id and os.path.isdir(plots_dir):
+                for p_name in os.listdir(plots_dir):
+                    if run_id in p_name:
+                        p_path = os.path.join(plots_dir, p_name)
+                        if os.path.isfile(p_path):
+                            try:
+                                os.remove(p_path)
+                                removed["plots"].append(p_path)
+                            except OSError as err:
+                                log_fn(f"Failed to remove plot {p_path}: {err}")
+
+            # 3. Delete related runs
+            if run_id and os.path.isdir(runs_dir):
+                for r_name in os.listdir(runs_dir):
+                    if run_id in r_name:
+                        r_path = os.path.join(runs_dir, r_name)
+                        if os.path.isfile(r_path):
+                            try:
+                                os.remove(r_path)
+                                removed["runs"].append(r_path)
+                            except OSError as err:
+                                log_fn(f"Failed to remove run {r_path}: {err}")
+
+        total_removed = len(removed["reports"]) + len(removed["plots"]) + len(removed["runs"])
+        log_fn(
+            f"Artifact cleanup complete: {total_removed} file(s) removed "
+            f"({len(removed['reports'])} reports, {len(removed['plots'])} plots, {len(removed['runs'])} runs)."
+        )
+        for category, file_list in removed.items():
+            for f in file_list:
+                log_fn(f"  [REMOVED {category[:-1].upper()}] {f}")
+
+        return removed
+
+    @staticmethod
     def prune_old_files(directory: str, max_files: int, suffix: str = "") -> List[str]:
         """Keep only the `max_files` most recently modified files matching `suffix`."""
         if max_files <= 0 or not os.path.isdir(directory):

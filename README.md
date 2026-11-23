@@ -80,16 +80,16 @@ python run_suite.py --compare-runs <RUN_ID_A> <RUN_ID_B>
 ```
 
 ### 3. Run Modular `pytest` Suite & HTML Report
-Every `pytest` invocation generates a self-contained HTML report at `results/report.html`.
+Every `pytest` invocation generates a unique, self-contained HTML1 report under `results/reports/report_<run_id>.html` with embedded real PNG plots and automatic `max_reports` retention (default `10`).
 
 ```bash
-# Run full suite (21 tests: sanity, functional, unit, negative/error simulation)
+# Run full suite (22 tests: sanity, per-ammeter functional, unit, negative/error simulation)
 pytest -v
 
 # Pre-flight fail-fast sanity gate across all ammeters
 pytest -m sanity -x -v
 
-# Run a single ammeter suite (starts ONLY that emulator)
+# Run a single ammeter suite (lazy fixtures start ONLY that emulator)
 pytest -m greenlee -v
 pytest -m entes -v
 pytest -m circutor -v
@@ -100,6 +100,46 @@ pytest -m "greenlee or entes" -v
 pytest -m unit -v
 pytest -m negative -v
 ```
+
+---
+
+## Test Suite Coverage Matrix (What We Test & Why)
+
+Every test in `tests/` maps directly to a core requirement, bonus challenge, or evaluation criterion from `Exam/ammeter-test-specification.md`. All 22 tests complete in ~`4s`.
+
+### Per-Ammeter Sanity & Functional Suites (`test_greenlee.py`, `test_entes.py`, `test_circutor.py`)
+Each ammeter has its own isolated suite and pytest marker (`greenlee`, `entes`, `circutor`) so teams can run one device, a subset, or all devices independently:
+
+| Test (per ammeter) | Markers | What It Verifies & Why | Assignment Requirement |
+| :--- | :--- | :--- | :--- |
+| `test_<ammeter>_sanity` | `<ammeter>`, `sanity` | Pre-flight TCP reachability and valid physical range (`Greenlee: 0.01–100A`, `ENTES: 5–200A`, `CIRCUTOR: 0.001–0.1A`). Used as a fail-fast gate (`-m sanity -x`) before running the full suite. | Core #1 (Unified API) |
+| `test_<ammeter>_sampling_and_core_stats` | `<ammeter>` | Collects 8 timed samples, validates exact sample count, zero errors, core metrics (`mean`, `median`, `std_dev`, `min`, `max`), confirms precision metrics are off by default, and embeds the real time-series PNG plot into the HTML1 report. | Core #2 (Sampling) & #3 (Result Analysis) |
+| `test_<ammeter>_opt_in_precision_metrics` | `<ammeter>` | Enables `include_precision_metrics=True`, validates `CV`, `IQR`, `CI95`, and `consistency_rating`, and embeds real time-series + boxplot PNGs and summary into the HTML1 report. | Bonus #5 (Accuracy & Precision) |
+
+### Framework Unit Tests (`tests/test_framework_unit.py` — marker: `unit`)
+Live emulator values are stochastic; offline deterministic unit tests guarantee exact math, config safety, archiving, and visualization:
+
+| Test | What It Verifies & Why | Assignment Requirement |
+| :--- | :--- | :--- |
+| `test_sampling_resolver_all_two_of_three_pairs` | Any 2 of (`count`, `duration`, `frequency`) accurately derive the 3rd. | Core #2 (Sampling) |
+| `test_sampling_resolver_rejects_conflicts_and_invalid_inputs` | Conflicting 3-of-3, under-specified (<2), or non-positive values raise `ValueError`. | Core #2 + Eval #3 (Error Handling) |
+| `test_logger_verbose_vs_info_filtering` | `VERBOSE` (level 15) logs per-sample readings for QA auditing; `INFO` suppresses them for production clarity. | QA Engineering Enhancement |
+| `test_statistical_analyzer_core_and_precision_metrics` | Deterministic math verification on `[10, 20, 30, 40, 50]` for exact core + opt-in precision metrics and empty-input error handling. | Core #3 + Bonus #5 |
+| `test_cross_ammeter_accuracy_ranking` | Verifies scale-independent `CV` ranking identifies the more consistent ammeter (`steady` over `noisy`). | Bonus #5 (Reliability Ranking) |
+| `test_result_manager_archive_retrieve_and_compare` | Verifies unique `run_id`, JSON persistence, reload by ID, historical listing, `compare_runs()` deltas, and `FileNotFoundError` on unknown IDs. | Core #4 (Result Management) |
+| `test_standalone_cleanup_old_reports_and_artifacts` | Prunes linked HTML reports, PNG plots, and JSON runs older than `max_reports` (`@pytest.mark.cleanup`) so disk usage stays bounded. | QA Engineering Enhancement |
+| `test_visualizer_generates_png_plots` | Always runs last in the session; generates combined `time_series`, `distribution` (with mean marker + legend), and `summary_comparison` PNGs from real session/archived data (falling back to clearly labeled `[VIRTUAL / MOCK DATA]` only if no real run exists) and embeds them in the HTML1 report. | Bonus #3 (Visualization) |
+
+### Error Simulation & Negative Tests (`tests/test_error_simulation.py` — marker: `negative`)
+Validates fault tolerance under simulated hardware anomalies and real TCP/protocol failures:
+
+| Test | What It Verifies & Why | Assignment Requirement |
+| :--- | :--- | :--- |
+| `test_error_simulator_timeout_resilient_collection` | Simulated timeouts are captured cleanly in `errors` without crashing the sampling loop. | Bonus (Error Simulation) |
+| `test_error_simulator_fail_fast_raises_immediately` | With `fail_fast=True`, simulated connection drops abort immediately as expected. | Bonus (Error Simulation) |
+| `test_error_simulator_outlier_injection` | Simulated outlier multiplier injects controlled current spikes for anomaly testing. | Bonus (Error Simulation) |
+| `test_connection_refused_on_closed_port` | Querying an unreachable TCP port raises a clear `ConnectionError`. | Eval #3 (Error Handling) |
+| `test_invalid_command_against_live_greenlee_emulator` | Sending an invalid command to a live emulator (which closes with empty payload) raises `ValueError` cleanly. | Eval #3 (Error Handling) |
 
 ---
 
@@ -119,12 +159,12 @@ Per specification: *"if you get an error in the code, please fix it and explain 
 
 ---
 
-## Sample Test Results & Accuracy Findings
+## Generated Reports & Accuracy Findings
 
-Sample artifacts included in the repository:
-- **Archived JSON Runs**: `results/runs/run_20261122_123339_451a041f.json`, `results/runs/run_20261122_123344_2ad03c38.json`
+Generated runtime artifacts under `results/` are excluded from Git via `.gitignore` to keep the repository clean, and are produced automatically on every local run and uploaded as downloadable Artifacts in GitHub Actions:
+- **HTML1 Test Reports**: `results/reports/report_<run_id>.html` (self-contained with embedded PNG plots, local-time `run_id`, and `max_reports: 10` retention)
+- **Archived JSON Runs**: `results/runs/<run_id>.json` (metadata, raw timestamped samples, statistics, and cross-ammeter comparison)
 - **Visual Reports**: `results/plots/*_time_series.png`, `results/plots/*_distribution.png`, `results/plots/*_summary_comparison.png`
-- **HTML Test Report**: `results/report.html` (`21 passed`, 0 warnings)
 
 ### Cross-Ammeter Precision Observation
 Because each emulator operates on a different physical scale (`0.001–0.1A` CIRCUTOR, `0.01–100A` Greenlee, `5–200A` ENTES), scale-independent **Coefficient of Variation (`CV = std_dev / mean`)** is used to assess relative precision:

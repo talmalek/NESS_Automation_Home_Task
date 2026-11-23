@@ -60,18 +60,16 @@ def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo) -> Gener
 
 
 def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
-    """Archive real session results (if any) and enforce max_reports retention."""
+    """Archive real session results (if any)."""
     cfg = session.config
     run_id = getattr(cfg, "_ammeter_run_id", None)
-    report_dir = getattr(cfg, "_ammeter_report_dir", "results/reports")
-    max_reports = getattr(cfg, "_ammeter_max_reports", 10)
     session_results: Dict[str, Dict[str, Any]] = getattr(cfg, "_ammeter_session_results", {})
 
     if run_id and session_results:
         rm_cfg = _load_result_mgmt_cfg()
         rm = ResultManager(
             save_dir=rm_cfg.get("save_path", "results/runs"),
-            max_runs=max_reports,
+            max_runs=None,
         )
         comparison = None
         if len(session_results) >= 2:
@@ -82,8 +80,6 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
             metadata={"source": "pytest_session"},
             run_id=run_id,
         )
-
-    ResultManager.prune_old_files(report_dir, max_reports, suffix=".html")
 
 
 def attach_plot_to_report(request: pytest.FixtureRequest, png_path: str, name: str) -> None:

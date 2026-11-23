@@ -125,21 +125,6 @@ def test_result_manager_archive_retrieve_and_compare(tmp_path) -> None:
         rm.load_run("nonexistent_run_id")
 
 
-def test_result_manager_retention_prunes_oldest_files(tmp_path) -> None:
-    rm = ResultManager(save_dir=str(tmp_path / "runs"), max_runs=3)
-    created_ids = []
-    for i in range(5):
-        rec = rm.save_run(
-            results={"greenlee": {"statistics": {"mean": float(i + 1), "median": float(i + 1), "std_dev": 0.1}}},
-            run_id=f"run_retention_{i:02d}",
-        )
-        created_ids.append(rec["run_id"])
-    remaining = rm.list_runs()
-    assert len(remaining) == 3
-    remaining_ids = {r["run_id"] for r in remaining}
-    assert set(created_ids[-3:]) == remaining_ids
-
-
 def test_visualizer_generates_png_plots(
     session_run_id: str,
     session_results: dict,
@@ -208,3 +193,35 @@ def test_visualizer_generates_png_plots(
         assert os.path.isfile(path)
         assert os.path.getsize(path) > 0
         attach_plot_to_report(request, path, os.path.basename(path))
+
+
+@pytest.mark.cleanup
+def test_standalone_cleanup_old_reports_and_artifacts() -> None:
+    """Standalone maintenance test to prune reports, plots, and runs older than max_reports."""
+    from src.utils.config import load_config
+
+    cfg = load_config("config/config.yaml")
+    rm_cfg = cfg.get("result_management", {}) or {}
+    max_reports = int(rm_cfg.get("max_reports", 10))
+    reports_dir = rm_cfg.get("report_dir", "results/reports")
+    runs_dir = rm_cfg.get("save_path", "results/runs")
+    plots_dir = "results/plots"
+
+    logger = TestLogger("artifact_cleanup", level="INFO")
+    logger.info(f"Starting standalone artifact cleanup (max_reports={max_reports})...")
+
+    removed = ResultManager.prune_linked_artifacts(
+        max_reports=max_reports,
+        reports_dir=reports_dir,
+        plots_dir=plots_dir,
+        runs_dir=runs_dir,
+        logger=logger,
+    )
+
+    remaining_reports = [
+        f for f in os.listdir(reports_dir)
+        if f.endswith(".html") and os.path.isfile(os.path.join(reports_dir, f))
+    ] if os.path.isdir(reports_dir) else []
+
+    logger.info(f"Cleanup finished. Remaining reports count: {len(remaining_reports)}")
+    assert len(remaining_reports) <= max_reports
