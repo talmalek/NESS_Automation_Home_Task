@@ -1,5 +1,4 @@
 from socket import AF_INET, SOCK_STREAM, socket, timeout as SocketTimeout
-from typing import Optional
 
 
 def request_current_from_ammeter(
@@ -8,7 +7,7 @@ def request_current_from_ammeter(
     host: str = "localhost",
     timeout: float = 2.0,
     verbose: bool = True,
-) -> Optional[float]:
+) -> float:
     """Request a single current reading from an ammeter emulator over TCP.
 
     Returns the parsed float current in Amperes, or raises an exception on

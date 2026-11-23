@@ -7,9 +7,9 @@ Design principle: **KISS (Keep It Simple)** — fulfill every core and bonus req
 ### Deliverables
 1. Complete Python implementation in `src/` with minimal, documented fixes to starter infrastructure.
 2. Configuration-driven execution via `config/config.yaml`.
-3. Modular `pytest` test suite (22 tests) with marker-based selection, fail-fast sanity gating, and self-contained HTML1 reports.
+3. Modular `pytest` test suite (23 tests) with marker-based selection, fail-fast sanity gating, and self-contained HTML1 reports.
 4. GitHub Actions CI workflow (`.github/workflows/ci.yml`) uploading `results/reports/`, `results/runs/`, and `results/plots/` as artifacts (`results/` excluded from Git via `.gitignore`).
-5. Updated `README.md` with architecture, design decisions, visual report previews (`docs/images/`), setup, usage, test coverage matrix, and bug-fix log.
+5. Updated `README.md` with architecture, design decisions, sample JSON run (`docs/sample_run.json`), visual report previews (`docs/images/`), setup, usage, test coverage matrix, and bug-fix log.
 
 ---
 
@@ -141,7 +141,7 @@ NESS_Automation_Home_Task/
 
 ---
 
-## 5. Test Suite Design & Coverage (22 Tests)
+## 5. Test Suite Design & Coverage (23 Tests)
 
 ### Execution Ordering & Fail-Fast Sanity Gate (`tests/conftest.py`, `pytest.ini`)
 1. **Priority Ordering (`pytest_collection_modifyitems`)**:
@@ -179,6 +179,7 @@ NESS_Automation_Home_Task/
 | `test_error_simulation.py` | `test_error_simulator_outlier_injection` | `negative` | Controlled outlier multiplier injection for anomaly testing. |
 | `test_error_simulation.py` | `test_connection_refused_on_closed_port` | `negative` | Closed TCP port raises `ConnectionError`. |
 | `test_error_simulation.py` | `test_invalid_command_against_live_greenlee_emulator` | `negative` | Invalid command to live emulator raises `ValueError` cleanly. |
+| `test_error_simulation.py` | `test_error_simulator_invalid_payload_and_validation` | `negative` | Verifies `invalid_payload` mode and `ErrorSimulator` parameter validation. |
 
 ---
 
@@ -190,5 +191,5 @@ NESS_Automation_Home_Task/
 | **Gate 2: Unified API & Sampler** | `src/utils/config.py` (validation + 2-of-3 sampling), `src/testing/ammeter_client.py`, `src/testing/sampler.py`, `src/testing/test_framework.py`. | **Done** |
 | **Gate 3: Analysis & Accuracy** | `src/analysis/analyzer.py` (core stats + opt-in precision metrics + cross-ammeter accuracy ranking). | **Done** |
 | **Gate 4: Storage & Visualization** | `src/storage/result_manager.py`, `src/visualization/visualizer.py`, `run_suite.py` CLI. | **Done** |
-| **Gate 5: Error Simulation & pytest Suite** | `tests/` (22 tests), `tests/conftest.py` (HTML1 reports, fail-fast sanity gate, ordering, retention cleanup). | **Done** |
+| **Gate 5: Error Simulation & pytest Suite** | `tests/` (23 tests), `tests/conftest.py` (HTML1 reports, fail-fast sanity gate, ordering, retention cleanup). | **Done** |
 | **Gate 6: CI, Docs & Git Hygiene** | `.github/workflows/ci.yml`, `.gitignore` (`results/`), `docs/images/`, `README.md`, `docs/SDR.md`. | **Done** |

@@ -79,3 +79,24 @@ def test_invalid_command_against_live_greenlee_emulator(greenlee_emulator) -> No
             timeout=1.0,
             verbose=False,
         )
+
+
+def test_error_simulator_invalid_payload_and_validation(
+    framework: AmmeterTestFramework,
+) -> None:
+    sim = ErrorSimulator(failure_rate=1.0, error_mode="invalid_payload", seed=3)
+    result = framework.run_test(
+        "mock_ammeter",
+        measurements_count=2,
+        total_duration_seconds=0.05,
+        error_simulator=sim,
+        client=_ConstantMockClient(),
+    )
+    assert result["samples_collected"] == 0
+    assert result["errors_count"] == 2
+    assert all(e["error_type"] == "ValueError" for e in result["errors"])
+
+    with pytest.raises(ValueError, match="failure_rate"):
+        ErrorSimulator(failure_rate=1.5)
+    with pytest.raises(ValueError, match="Invalid error_mode"):
+        ErrorSimulator(failure_rate=0.5, error_mode="unknown_mode")

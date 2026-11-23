@@ -29,15 +29,13 @@ def _load_result_mgmt_cfg() -> Dict[str, Any]:
 
 
 def pytest_configure(config: pytest.Config) -> None:
-    """Assign a unique run_id and per-run HTML1 report path; enforce retention."""
+    """Assign a unique run_id and per-run HTML1 report path."""
     rm_cfg = _load_result_mgmt_cfg()
     report_dir = rm_cfg.get("report_dir", "results/reports")
     os.makedirs(report_dir, exist_ok=True)
 
     run_id = ResultManager.generate_run_id(prefix="pytest")
     config._ammeter_run_id = run_id  # type: ignore[attr-defined]
-    config._ammeter_report_dir = report_dir  # type: ignore[attr-defined]
-    config._ammeter_max_reports = int(rm_cfg.get("max_reports", 10))  # type: ignore[attr-defined]
     config._ammeter_session_results = {}  # type: ignore[attr-defined]
     config._failed_sanity = set()  # type: ignore[attr-defined]
 

@@ -2,7 +2,7 @@ import json
 import os
 import platform
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 
@@ -178,7 +178,7 @@ class ResultManager:
 
         payload: Dict[str, Any] = {
             "run_id": resolved_id,
-            "saved_at_utc": saved_at,
+            "saved_at": saved_at,
             "metadata": run_metadata,
             "results": results,
             "comparison": comparison,
@@ -218,7 +218,7 @@ class ResultManager:
                 summaries.append(
                     {
                         "run_id": data.get("run_id", fname[:-5]),
-                        "saved_at_utc": data.get("saved_at_utc", ""),
+                        "saved_at": data.get("saved_at") or data.get("saved_at_utc", ""),
                         "ammeters": data.get("metadata", {}).get("ammeters_tested", []),
                         "most_reliable": (data.get("comparison") or {}).get("most_reliable"),
                         "file_path": fpath,
@@ -227,7 +227,7 @@ class ResultManager:
             except (OSError, json.JSONDecodeError):
                 continue
 
-        summaries.sort(key=lambda item: item.get("saved_at_utc", ""), reverse=True)
+        summaries.sort(key=lambda item: item.get("saved_at", ""), reverse=True)
         return summaries
 
     def compare_runs(self, run_id_a: str, run_id_b: str) -> Dict[str, Any]:

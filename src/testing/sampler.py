@@ -1,11 +1,13 @@
 import random
 import time
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from src.testing.ammeter_client import BaseAmmeterClient
 from src.utils.config import SamplingConfig
+
+VALID_ERROR_MODES = ("timeout", "connection", "invalid_payload", "outlier")
 
 
 @dataclass(frozen=True)
@@ -19,7 +21,7 @@ class Sample:
         return asdict(self)
 
 
-@dataclass
+@dataclass(frozen=True)
 class SamplingError:
     index: int
     timestamp_iso: str
@@ -40,6 +42,11 @@ class ErrorSimulator:
     seed: Optional[int] = None
 
     def __post_init__(self) -> None:
+        if not (0.0 <= self.failure_rate <= 1.0):
+            raise ValueError(f"failure_rate must be between 0.0 and 1.0, got {self.failure_rate}.")
+        if self.error_mode not in VALID_ERROR_MODES:
+            allowed = ", ".join(VALID_ERROR_MODES)
+            raise ValueError(f"Invalid error_mode {self.error_mode!r}. Allowed: {allowed}.")
         self._rng = random.Random(self.seed)
 
     def should_trigger(self) -> bool:

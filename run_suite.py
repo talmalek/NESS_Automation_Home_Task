@@ -78,7 +78,7 @@ def main() -> None:
         print(f"Archived runs ({len(runs)}):")
         for item in runs:
             print(
-                f"  - {item['run_id']} | saved={item['saved_at_utc']} | "
+                f"  - {item['run_id']} | saved={item['saved_at']} | "
                 f"ammeters={','.join(item['ammeters'])} | best={item['most_reliable']}"
             )
         return

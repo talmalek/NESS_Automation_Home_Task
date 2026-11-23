@@ -202,10 +202,11 @@ def test_standalone_cleanup_old_reports_and_artifacts() -> None:
 
     cfg = load_config("config/config.yaml")
     rm_cfg = cfg.get("result_management", {}) or {}
+    viz_cfg = (cfg.get("analysis", {}) or {}).get("visualization", {}) or {}
     max_reports = int(rm_cfg.get("max_reports", 10))
     reports_dir = rm_cfg.get("report_dir", "results/reports")
     runs_dir = rm_cfg.get("save_path", "results/runs")
-    plots_dir = "results/plots"
+    plots_dir = viz_cfg.get("output_dir", "results/plots")
 
     logger = TestLogger("artifact_cleanup", level="INFO")
     logger.info(f"Starting standalone artifact cleanup (max_reports={max_reports})...")
@@ -217,6 +218,7 @@ def test_standalone_cleanup_old_reports_and_artifacts() -> None:
         runs_dir=runs_dir,
         logger=logger,
     )
+    assert set(removed.keys()) == {"reports", "plots", "runs"}
 
     remaining_reports = [
         f for f in os.listdir(reports_dir)

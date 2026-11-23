@@ -25,13 +25,10 @@ class TcpAmmeterClient(BaseAmmeterClient):
         self.config = config
 
     def read_current(self) -> float:
-        value = request_current_from_ammeter(
+        return request_current_from_ammeter(
             port=self.config.port,
             command=self.config.command,
             host=self.config.host,
             timeout=self.config.timeout_seconds,
             verbose=False,
         )
-        if value is None:
-            raise ValueError(f"No current value returned from ammeter '{self.name}'.")
-        return float(value)

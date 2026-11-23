@@ -2,7 +2,7 @@
 
 A modular, configuration-driven Python testing framework for evaluating embedded current measurement ammeter emulators (**Greenlee**, **ENTES**, and **CIRCUTOR**), built with strict SUT immutability, drift-compensated sampling, opt-in statistical precision analysis, self-contained HTML1 visual reports, and GitHub Actions CI.
 
-Full system design specification: [docs/SDR.md](docs/SDR.md).
+Full system design specification: [docs/SDR.md](docs/SDR.md) | Sample JSON test result: [docs/sample_run.json](docs/sample_run.json).
 
 ---
 
@@ -103,8 +103,6 @@ pip install -r requirements.txt
 | `numpy>=1.21.0` | Core statistical calculations |
 | `scipy>=1.7.0` | Exact t-distribution 95% confidence intervals (`CI95`) |
 | `matplotlib>=3.4.0` | Headless (`Agg`) PNG visualization reports |
-| `seaborn>=0.11.0` | Starter dependency preserved for statistical plotting |
-| `pandas>=1.3.0` | Starter dependency preserved for tabular analysis |
 | `pytest>=7.0.0` | Modular test runner with marker-based selection |
 | `pytest-reporter-html1>=0.9.0` | Single-file HTML1 test report with inline PNG plots |
 
@@ -136,7 +134,7 @@ python run_suite.py --compare-runs <RUN_ID_A> <RUN_ID_B>
 
 ### 3. Run Modular `pytest` Suites, Visualizer & Standalone Cleanup
 ```bash
-# Run full suite (22 tests: sanity -> functional/unit/negative -> visualizer -> cleanup)
+# Run full suite (23 tests: sanity -> functional/unit/negative -> visualizer -> cleanup)
 pytest -v
 
 # Pre-flight fail-fast sanity gate across all ammeters
@@ -163,7 +161,7 @@ pytest -m cleanup -v
 
 ## Test Suite Coverage Matrix (What We Test & Why)
 
-Every test in `tests/` maps directly to a core requirement, bonus challenge, or evaluation criterion from `Exam/ammeter-test-specification.md`. All 22 tests complete in ~`4s`.
+Every test in `tests/` maps directly to a core requirement, bonus challenge, or evaluation criterion from `Exam/ammeter-test-specification.md`. All 23 tests complete in ~`4s`.
 
 ### Per-Ammeter Sanity & Functional Suites (`test_greenlee.py`, `test_entes.py`, `test_circutor.py`)
 Each ammeter has its own isolated suite and pytest marker (`greenlee`, `entes`, `circutor`) so teams can run one device, a subset, or all devices independently:
@@ -198,6 +196,7 @@ Validates fault tolerance under simulated hardware anomalies and real TCP/protoc
 | `test_error_simulator_outlier_injection` | Simulated outlier multiplier injects controlled current spikes for anomaly testing. | Bonus (Error Simulation) |
 | `test_connection_refused_on_closed_port` | Querying an unreachable TCP port raises a clear `ConnectionError`. | Eval #3 (Error Handling) |
 | `test_invalid_command_against_live_greenlee_emulator` | Sending an invalid command to a live emulator (which closes with empty payload) raises `ValueError` cleanly. | Eval #3 (Error Handling) |
+| `test_error_simulator_invalid_payload_and_validation` | Verifies `invalid_payload` injection mode and `ErrorSimulator` parameter validation (`failure_rate`, `error_mode`). | Bonus (Error Simulation) |
 
 ---
 

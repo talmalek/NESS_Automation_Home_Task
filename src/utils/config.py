@@ -60,12 +60,18 @@ def resolve_sampling_params(
         )
 
     if measurements_count is not None and (
-        not isinstance(measurements_count, int) or measurements_count <= 0
+        isinstance(measurements_count, bool)
+        or not isinstance(measurements_count, int)
+        or measurements_count <= 0
     ):
         raise ValueError("measurements_count must be a positive integer.")
-    if total_duration_seconds is not None and total_duration_seconds <= 0:
+    if total_duration_seconds is not None and (
+        isinstance(total_duration_seconds, bool) or total_duration_seconds <= 0
+    ):
         raise ValueError("total_duration_seconds must be > 0.")
-    if sampling_frequency_hz is not None and sampling_frequency_hz <= 0:
+    if sampling_frequency_hz is not None and (
+        isinstance(sampling_frequency_hz, bool) or sampling_frequency_hz <= 0
+    ):
         raise ValueError("sampling_frequency_hz must be > 0.")
 
     if sampling_frequency_hz is None:
@@ -144,6 +150,8 @@ def get_ammeter_config(config: Dict[str, Any], ammeter_type: str) -> AmmeterConf
         raise ValueError(f"Unknown ammeter type {ammeter_type!r}. Available: {available}")
 
     entry = ammeters[key]
+    if not isinstance(entry, dict) or "port" not in entry or "command" not in entry:
+        raise ValueError(f"Ammeter '{key}' configuration must define 'port' and 'command'.")
     testing_cfg = config.get("testing", {}) or {}
     cmd = entry["command"]
     command_bytes = cmd.encode("utf-8") if isinstance(cmd, str) else cmd

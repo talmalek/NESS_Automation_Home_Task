@@ -24,12 +24,6 @@ ammeters:
 
 analysis:
   include_precision_metrics: false
-  statistical_metrics:
-    - mean
-    - median
-    - std_dev
-    - min
-    - max
   visualization:
     enabled: true
     output_dir: "results/plots"
@@ -44,4 +38,3 @@ result_management:
   log_dir: "results/logs"
   log_level: "VERBOSE"  # VERBOSE logs every sample reading; set to INFO in production
   max_reports: 10       # Keep only the N newest HTML reports / archived runs
-  format: "json"
