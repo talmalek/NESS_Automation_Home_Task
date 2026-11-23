@@ -4,6 +4,8 @@ from typing import Any, Dict, Iterable, List, Optional
 import matplotlib
 
 matplotlib.use("Agg")  # Headless backend for cross-platform & CI compatibility
+from matplotlib.lines import Line2D
+from matplotlib.patches import Patch
 import matplotlib.pyplot as plt
 
 
@@ -87,21 +89,56 @@ class ResultVisualizer:
         self, run_id: str, results: Dict[str, Dict[str, Any]], title_suffix: str = ""
     ) -> str:
         n = len(results)
-        fig, axes = plt.subplots(1, n, figsize=(4.5 * n, 4.2))
+        fig, axes = plt.subplots(1, n, figsize=(4.8 * n, 4.6))
         if n == 1:
             axes = [axes]
 
         for ax, (name, res) in zip(axes, results.items()):
             vals = [s["current_amps"] for s in res["samples"]]
-            ax.boxplot(vals, patch_artist=True, boxprops={"facecolor": "#4C72B0", "alpha": 0.6})
+            ax.boxplot(
+                vals,
+                patch_artist=True,
+                showmeans=True,
+                boxprops={"facecolor": "#4C72B0", "alpha": 0.6},
+                medianprops={"color": "#DD8452", "linewidth": 2.0},
+                meanprops={
+                    "marker": "D",
+                    "markerfacecolor": "#2ca02c",
+                    "markeredgecolor": "black",
+                    "markersize": 6,
+                },
+            )
             ax.set_title(name.upper())
             ax.set_ylabel("Current (A)")
             ax.set_xticks([])
             ax.grid(True, axis="y", alpha=0.3)
 
+        legend_handles = [
+            Patch(facecolor="#4C72B0", edgecolor="black", alpha=0.6, label="IQR (Q1–Q3, middle 50%)"),
+            Line2D([0], [0], color="#DD8452", lw=2.0, label="Median (Q2)"),
+            Line2D(
+                [0],
+                [0],
+                marker="D",
+                color="w",
+                markerfacecolor="#2ca02c",
+                markeredgecolor="black",
+                markersize=6,
+                label="Mean",
+            ),
+            Line2D([0], [0], color="black", lw=1.2, label="Whiskers (Min–Max / 1.5×IQR)"),
+        ]
+        fig.legend(
+            handles=legend_handles,
+            loc="lower center",
+            ncol=2 if n == 1 else 4,
+            fontsize=8,
+            frameon=True,
+        )
+
         suffix = f" {title_suffix}" if title_suffix else ""
         fig.suptitle(f"Current Distribution per Ammeter ({run_id}){suffix}", fontsize=12, fontweight="bold")
-        fig.tight_layout(rect=(0, 0, 1, 0.94))
+        fig.tight_layout(rect=(0, 0.10 if n == 1 else 0.08, 1, 0.93))
 
         out_path = os.path.join(self.output_dir, f"{run_id}_distribution.png")
         fig.savefig(out_path, dpi=120)
