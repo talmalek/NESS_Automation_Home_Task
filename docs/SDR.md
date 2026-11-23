@@ -124,7 +124,7 @@ NESS_Automation_Home_Task/
 │       ├── logger.py          # File + console logger with VERBOSE=15
 │       └── Utils.py           # Existing utility
 ├── tests/
-│   ├── conftest.py            # Lazy emulator fixtures, execution ordering, fail-fast skip, HTML1 report hooks
+│   ├── conftest.py            # Lazy emulator fixtures, EMULATOR_VALID sanity flags, execution ordering, HTML1 hooks
 │   ├── test_greenlee.py       # Greenlee sanity + sampling + precision tests
 │   ├── test_entes.py          # ENTES sanity + sampling + precision tests
 │   ├── test_circutor.py       # CIRCUTOR sanity + sampling + precision tests
@@ -149,8 +149,10 @@ NESS_Automation_Home_Task/
    - Priority `1`: Functional ammeter tests (`greenlee`, `entes`, `circutor`), `unit`, and `negative` tests
    - Priority `2`: Combined `test_visualizer_generates_png_plots`
    - Priority `3`: `@pytest.mark.cleanup` (`test_standalone_cleanup_old_reports_and_artifacts`)
-2. **Dependent Skip Guard (`pytest_runtest_setup` + `pytest_runtest_makereport`)**:
-   - If `@pytest.mark.sanity` fails for an ammeter (e.g., `greenlee`), `pytest_runtest_setup` automatically skips `test_greenlee_sampling_and_core_stats` and `test_greenlee_opt_in_precision_metrics` without cascading false failures.
+2. **Global Per-Emulator Sanity Flags (`EMULATOR_VALID`, `pytest_runtest_setup`, `pytest_runtest_makereport`)**:
+   - `EMULATOR_VALID = {"greenlee": False, "entes": False, "circutor": False}` resets to `False` at session start (`pytest_configure`).
+   - Passing `@pytest.mark.sanity` flips `EMULATOR_VALID[ammeter] = True`.
+   - Before any dependent ammeter test runs, `pytest_runtest_setup` verifies `EMULATOR_VALID[ammeter]` and fails immediately with `Emulator [<ammeter>] not valid` if `False` (unrelated suites like `unit`, `negative`, and valid ammeters continue normally inside one unified run ID and one HTML1 report).
 3. **Markers (`pytest.ini`)**: `sanity`, `greenlee`, `entes`, `circutor`, `unit`, `negative`, `cleanup`.
 
 ### Test Coverage Matrix

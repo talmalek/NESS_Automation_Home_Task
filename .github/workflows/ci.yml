@@ -42,10 +42,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Pre-flight Sanity Gate (Fail-Fast)
-        run: pytest -m sanity -x -v
-
-      - name: Run Test Suite & Generate HTML1 Report
+      - name: Run Test Suite & Generate Single HTML1 Report
         run: |
           if [ "${{ github.event.inputs.suite }}" = "" ] || [ "${{ github.event.inputs.suite }}" = "all" ]; then
             pytest -v

@@ -44,9 +44,10 @@ flowchart LR
    INFO     | Starting test for 'greenlee': count=8, duration=0.400s, freq=20.00Hz
    INFO     | Stats 'greenlee': mean=0.1012A, median=0.1105A, std=0.0641A, min=0.0117A, max=0.1935A
    ```
-6. **Per-Ammeter Sanity Fail-Fast Gate (`tests/conftest.py`)**:
-   - `pytest_collection_modifyitems` guarantees `@pytest.mark.sanity` tests always execute **first** for each ammeter.
-   - If an ammeter's sanity check fails (e.g., unreachable or out-of-range), `pytest_runtest_setup` **automatically skips** its dependent `sampling_and_core_stats` and `opt_in_precision_metrics` tests (`"Skipped: '<ammeter>' sanity test failed"`) — avoiding wasted execution and cascading false failures.
+6. **Per-Ammeter Sanity Flag Gate (`tests/conftest.py`)**:
+   - Global `EMULATOR_VALID` flags (`greenlee`, `entes`, `circutor`) initialize to `False` at the start of every session.
+   - `pytest_collection_modifyitems` guarantees `@pytest.mark.sanity` tests always execute **first** for each ammeter; passing sanity sets `EMULATOR_VALID[ammeter] = True`.
+   - Before any dependent ammeter test (`sampling_and_core_stats`, `opt_in_precision_metrics`) runs, `pytest_runtest_setup` checks `EMULATOR_VALID[ammeter]` and immediately fails with **`Emulator [<ammeter>] not valid`** if `False`, while unrelated suites (`unit`, `negative`, other valid ammeters) remain unaffected — all inside **one unified run ID and one HTML1 report**.
 7. **Real-Data Visualizer & Self-Contained HTML1 Reports (`pytest-reporter-html1`)**:
    - Every `pytest` run creates a unique local-time report `results/reports/report_<run_id>.html` with real PNG plots embedded inline (no external Allure server required).
    - The combined visualizer test always runs after all ammeter tests, pulling live session data (or the latest archived run in `results/runs/`), and only falls back to clearly labeled **`[VIRTUAL / MOCK DATA]`** if no real run files exist.
@@ -229,7 +230,6 @@ Workflow: [.github/workflows/ci.yml](.github/workflows/ci.yml)
    - `results/plots/*.png` (time-series, distribution boxplot, and CV% comparison charts)
 
 ### Automated Pipeline Steps
-1. Runs `pytest -m sanity -x -v` as a fail-fast pre-flight gate.
-2. Runs full `pytest -v` (or the selected suite marker via `workflow_dispatch`).
-3. Executes `python run_suite.py --count 15 --duration 1.0 --precision --log-level INFO`.
-4. Uploads `results/reports/`, `results/runs/`, and `results/plots/` as downloadable artifacts (`results/` itself stays excluded from Git via `.gitignore`).
+1. Runs `pytest -v` (or the selected suite marker via `workflow_dispatch`) in a **single unified run** (sanity runs first per ammeter, setting `EMULATOR_VALID` flags) — generating **one `run_id` and one HTML1 report**.
+2. Executes `python run_suite.py --count 15 --duration 1.0 --precision --log-level INFO`.
+3. Uploads `results/reports/`, `results/runs/`, and `results/plots/` as downloadable artifacts (`results/` itself stays excluded from Git via `.gitignore`).

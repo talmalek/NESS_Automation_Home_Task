@@ -20,6 +20,9 @@ from src.utils.logger import TestLogger
 
 AMMETER_MARKERS = ("greenlee", "entes", "circutor")
 
+# Global per-emulator sanity validity flags: False until each emulator's sanity test passes
+EMULATOR_VALID: Dict[str, bool] = {name: False for name in AMMETER_MARKERS}
+
 
 def _load_result_mgmt_cfg() -> Dict[str, Any]:
     try:
@@ -29,7 +32,14 @@ def _load_result_mgmt_cfg() -> Dict[str, Any]:
 
 
 def pytest_configure(config: pytest.Config) -> None:
-    """Assign a unique run_id and per-run HTML1 report path."""
+    """Assign a unique run_id, reset emulator sanity flags, and set HTML1 report path."""
+    for name in AMMETER_MARKERS:
+        EMULATOR_VALID[name] = False
+
+    # Do not generate an empty HTML1 report during IDE test discovery (--collect-only)
+    if getattr(config.option, "collectonly", False):
+        return
+
     rm_cfg = _load_result_mgmt_cfg()
     report_dir = rm_cfg.get("report_dir", "results/reports")
     os.makedirs(report_dir, exist_ok=True)
@@ -37,7 +47,6 @@ def pytest_configure(config: pytest.Config) -> None:
     run_id = ResultManager.generate_run_id(prefix="pytest")
     config._ammeter_run_id = run_id  # type: ignore[attr-defined]
     config._ammeter_session_results = {}  # type: ignore[attr-defined]
-    config._failed_sanity = set()  # type: ignore[attr-defined]
 
     # Dynamically set unique HTML1 report filename unless caller explicitly passed --report
     existing_reports = getattr(config.option, "report", None)
@@ -61,27 +70,23 @@ def pytest_collection_modifyitems(items: List[pytest.Item]) -> None:
 
 
 def pytest_runtest_setup(item: pytest.Item) -> None:
-    """Skip dependent ammeter tests if that ammeter's sanity check failed."""
+    """Verify required emulator passed sanity; fail immediately if its flag is False."""
     if item.get_closest_marker("sanity") is not None:
         return
-    failed_sanity = getattr(item.config, "_failed_sanity", set())
     for ammeter in AMMETER_MARKERS:
-        if ammeter in failed_sanity and item.get_closest_marker(ammeter) is not None:
-            pytest.skip(
-                f"Skipped: '{ammeter}' sanity test failed — skipping dependent sampling/precision tests."
-            )
+        if item.get_closest_marker(ammeter) is not None and not EMULATOR_VALID.get(ammeter, False):
+            pytest.fail(f"Emulator [{ammeter}] not valid")
 
 
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo) -> Generator:
     outcome = yield
     report = outcome.get_result()
-    if report.failed and report.when in ("setup", "call"):
+    if report.when == "call" and report.passed:
         if item.get_closest_marker("sanity") is not None:
-            failed_sanity = getattr(item.config, "_failed_sanity", set())
             for ammeter in AMMETER_MARKERS:
                 if item.get_closest_marker(ammeter) is not None:
-                    failed_sanity.add(ammeter)
+                    EMULATOR_VALID[ammeter] = True
     if report.when == "call":
         extras = getattr(item, "_html_extras", [])
         if extras:
