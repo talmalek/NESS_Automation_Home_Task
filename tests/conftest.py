@@ -1,7 +1,9 @@
 import os
 import socket
+import sys
 import threading
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Generator, List, Type
 
@@ -67,6 +69,20 @@ def pytest_collection_modifyitems(items: List[pytest.Item]) -> None:
         return 1
 
     items.sort(key=_priority)
+
+
+def log_test_step(message: str, level: str = "INFO") -> None:
+    """Write a timestamped log line to stderr so pytest captures it in the Call phase."""
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    sys.stderr.write(f"{now} | {level:<8} | pytest_runner | {message}\n")
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_pyfunc_call(pyfuncitem: pytest.Function) -> Generator:
+    """Log test start with test name, date, and time inside the captured Call phase."""
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    log_test_step(f"START test '{pyfuncitem.name}' ({pyfuncitem.nodeid}) at {now}")
+    yield
 
 
 def pytest_runtest_setup(item: pytest.Item) -> None:

@@ -99,6 +99,13 @@ def resolve_sampling_params(
     )
 
 
+_SAMPLING_CLI_FLAGS = {
+    "measurements_count": "--count",
+    "total_duration_seconds": "--duration",
+    "sampling_frequency_hz": "--frequency",
+}
+
+
 def get_sampling_config(
     config: Dict[str, Any],
     measurements_count: Optional[int] = None,
@@ -106,38 +113,30 @@ def get_sampling_config(
     sampling_frequency_hz: Optional[float] = None,
 ) -> SamplingConfig:
     """Resolve sampling parameters using config defaults with optional runtime overrides."""
-    defaults = config.get("testing", {}).get("sampling", {}) or {}
-    override_provided = any(
-        p is not None
-        for p in (measurements_count, total_duration_seconds, sampling_frequency_hz)
-    )
-    if override_provided:
-        provided_count = sum(
-            p is not None
-            for p in (measurements_count, total_duration_seconds, sampling_frequency_hz)
+    overrides = {
+        "measurements_count": measurements_count,
+        "total_duration_seconds": total_duration_seconds,
+        "sampling_frequency_hz": sampling_frequency_hz,
+    }
+    given = [k for k, v in overrides.items() if v is not None]
+    if len(given) == 1:
+        missing = [_SAMPLING_CLI_FLAGS[k] for k in overrides if k not in given]
+        raise ValueError(
+            f"Missing sampling argument: got only {_SAMPLING_CLI_FLAGS[given[0]]}. "
+            f"Provide at least 2 of --count/--duration/--frequency (add {' or '.join(missing)})."
         )
-        if provided_count >= 2:
-            return resolve_sampling_params(
-                measurements_count=measurements_count,
-                total_duration_seconds=total_duration_seconds,
-                sampling_frequency_hz=sampling_frequency_hz,
-            )
+    if len(given) >= 2:
+        return resolve_sampling_params(
+            measurements_count=measurements_count,
+            total_duration_seconds=total_duration_seconds,
+            sampling_frequency_hz=sampling_frequency_hz,
+        )
 
-    count = measurements_count if measurements_count is not None else defaults.get("measurements_count")
-    duration = (
-        total_duration_seconds
-        if total_duration_seconds is not None
-        else defaults.get("total_duration_seconds")
-    )
-    freq = (
-        sampling_frequency_hz
-        if sampling_frequency_hz is not None
-        else defaults.get("sampling_frequency_hz")
-    )
+    defaults = config.get("testing", {}).get("sampling", {}) or {}
     return resolve_sampling_params(
-        measurements_count=count,
-        total_duration_seconds=duration,
-        sampling_frequency_hz=freq,
+        measurements_count=defaults.get("measurements_count"),
+        total_duration_seconds=defaults.get("total_duration_seconds"),
+        sampling_frequency_hz=defaults.get("sampling_frequency_hz"),
     )
 
 

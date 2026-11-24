@@ -28,7 +28,7 @@ flowchart LR
 1. **Strict SUT Immutability**: Vendor emulator implementations (`Ammeters/Greenlee_Ammeter.py`, `Ammeters/Entes_Ammeter.py`, `Ammeters/Circutor_Ammeter.py`) were **never modified**. Only minimal, documented infrastructure fixes were applied to `base_ammeter.py`, `client.py`, and `main.py` (see [Bug-Fix Log](#starter-code-bug-fix-log)).
 2. **KISS + Scalable OOP Client (`src/testing/ammeter_client.py`)**: All TCP emulators share the same wire contract (`command -> float`). `BaseAmmeterClient` (ABC) defines the contract, and a single config-driven `TcpAmmeterClient` serves all TCP ammeters — adding a 4th or 5th TCP ammeter requires **zero Python code changes**, only a YAML entry in `config/config.yaml`. Non-TCP protocols (Serial, Modbus) can subclass `BaseAmmeterClient` cleanly.
 3. **2-of-3 Sampling Resolver (`src/utils/config.py`)**: Because `count = duration × frequency` is mathematically over-constrained, providing any 2 of (`measurements_count`, `total_duration_seconds`, `sampling_frequency_hz`) derives the 3rd automatically, and providing all 3 validates consistency (`ValueError` on conflict).
-4. **Shared Analytics + Opt-In Precision Metrics (`src/analysis/analyzer.py`)**: Core metrics (`mean`, `median`, `std_dev`, `min`, `max`) run by default with zero per-ammeter duplication. Calibration/precision metrics (`CV`, `IQR`, `CI95`, `consistency_rating`) are **opt-in** via `include_precision_metrics=True` (or `--precision`) and power cross-ammeter reliability ranking.
+4. **Shared Analytics + Opt-In Precision Metrics (`src/analysis/analyzer.py`)**: Core metrics (`mean`, `median`, `std_dev`, `min`, `max`) run by default with zero per-ammeter duplication. Calibration/precision metrics (`CV`, `IQR`, `CI95`, `consistency_rating`) are **opt-in** via `include_precision_metrics=True` (or `--precision`). `CI95` uses an embedded two-sided 95% Student-t table instead of SciPy to minimize dependencies. Cross-ammeter ranking sorts by reading reliability (`success_rate` descending) first, then scale-independent `CV%` ascending.
 5. **INFO vs. VERBOSE Configurable Logging (`src/utils/logger.py`)**:
    - Emulator `stdout` prints belong to the SUT and are never mixed into framework logs.
    - A custom **`VERBOSE` level (`15`, between `DEBUG=10` and `INFO=20`)** logs every individual sample reading (`elapsed`, `current_amps`) for QA auditing and math verification, while **`INFO`** logs only test lifecycle events and final statistics.
@@ -79,21 +79,23 @@ Compares scale-independent **Coefficient of Variation (`CV% = std_dev / mean`, l
 
 ![Relative Precision Comparison CV%](docs/images/summary_comparison.png)
 
-### Cross-Ammeter Accuracy Findings
-Because each emulator operates on a different physical scale (`0.001–0.1A` CIRCUTOR, `0.01–100A` Greenlee, `5–200A` ENTES), scale-independent **CV%** ranks relative precision fairly:
-- **#1 CIRCUTOR** (Rogowski 10-sample integration): consistently achieves the lowest `CV` (~`40%–56%`) because summing 10 voltage samples averages out random variance.
-- **#2 ENTES** (Hall Effect `B × K`): moderate-to-high dispersion (~`60%` CV).
-- **#3 Greenlee** (Ohm's Law `V / R`): highest relative dispersion (~`80%+` CV) due to heavy right-skew spikes when `R → 0.1Ω`.
+### Cross-Ammeter Precision & Reliability Findings
+Because each emulator operates on a different physical scale (`0.001–0.1A` CIRCUTOR, `0.01–100A` Greenlee, `5–200A` ENTES), the comparison ranks **reliability** (`success_rate` descending) first, then scale-independent **precision** (`CV%` ascending):
+- **#1 CIRCUTOR** (Rogowski 10-sample integration): consistently achieves the lowest `CV` (~`49%` theoretical), driven mainly by the random `time_step` (`0.001–0.01s`) rather than voltage-sample variance.
+- **#2 ENTES** (Hall Effect `B × K`): moderate-to-high dispersion (~`60%` theoretical CV).
+- **#3 Greenlee** (Ohm's Law `V / R`): highest relative dispersion (~`80%+` sample CV) due to heavy right-skew spikes when `R → 0.1Ω`.
+
+> **Accuracy vs. Precision:** Accuracy measures closeness to a *true* reference value. Because the three emulators generate independent random currents on unrelated physical scales rather than measuring one shared load, true or relative accuracy cannot be computed without a reference. The framework therefore evaluates **precision** (`CV`, `CI95`, `IQR`) and **reliability** (`success_rate`). On a real bench, connecting all meters in series on one known load with a calibrated reference enables bias and `% error` calculation directly.
 
 ---
 
 ## Setup & Installed Dependencies
 
-Python **3.9+** compatible (verified on Python 3.9.6 macOS and Python 3.11 Ubuntu CI).
+**Tested platforms:** macOS (Python 3.9.6, local) and Ubuntu Linux (Python 3.11, GitHub Actions CI). The code uses cross-platform APIs (`os.path`, `localhost` TCP, headless `Agg` backend); Windows was **not** tested.
 
 ```bash
 python3 -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
+source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
@@ -101,8 +103,7 @@ pip install -r requirements.txt
 | Package | Purpose |
 | :--- | :--- |
 | `pyyaml>=6.0` | YAML configuration loading (`config/config.yaml`) |
-| `numpy>=1.21.0` | Core statistical calculations |
-| `scipy>=1.7.0` | Exact t-distribution 95% confidence intervals (`CI95`) |
+| `numpy>=1.21.0` | Core statistical calculations (already required by `matplotlib`) |
 | `matplotlib>=3.4.0` | Headless (`Agg`) PNG visualization reports |
 | `pytest>=7.0.0` | Modular test runner with marker-based selection |
 | `pytest-reporter-html1>=0.9.0` | Single-file HTML1 test report with inline PNG plots |
@@ -135,14 +136,14 @@ python run_suite.py --compare-runs <RUN_ID_A> <RUN_ID_B>
 
 ### 3. Run Modular `pytest` Suites, Visualizer & Standalone Cleanup
 ```bash
-# Run full suite (23 tests: sanity -> functional/unit/negative -> visualizer -> cleanup)
+# Run full suite (27 tests: sanity -> functional/unit/negative -> visualizer -> cleanup)
 pytest -v
 
 # Pre-flight fail-fast sanity gate across all ammeters
 pytest -m sanity -x -v
 
 # Run a single ammeter suite (lazy fixtures start ONLY that emulator;
-# if sanity fails, sampling & precision tests for that ammeter skip automatically)
+# if sanity fails, sampling & precision tests for that ammeter FAIL immediately with "Emulator [<ammeter>] not valid")
 pytest -m greenlee -v
 pytest -m entes -v
 pytest -m circutor -v
@@ -162,16 +163,16 @@ pytest -m cleanup -v
 
 ## Test Suite Coverage Matrix (What We Test & Why)
 
-Every test in `tests/` maps directly to a core requirement, bonus challenge, or evaluation criterion from `Exam/ammeter-test-specification.md`. All 23 tests complete in ~`4s`.
+Every test in `tests/` maps directly to a core requirement, bonus challenge, or evaluation criterion from `Exam/ammeter-test-specification.md`. All 27 tests complete in ~`4s`.
 
 ### Per-Ammeter Sanity & Functional Suites (`test_greenlee.py`, `test_entes.py`, `test_circutor.py`)
 Each ammeter has its own isolated suite and pytest marker (`greenlee`, `entes`, `circutor`) so teams can run one device, a subset, or all devices independently:
 
 | Test (per ammeter) | Markers | What It Verifies & Why | Assignment Requirement |
 | :--- | :--- | :--- | :--- |
-| `test_<ammeter>_sanity` | `<ammeter>`, `sanity` | Pre-flight TCP reachability and valid physical range (`Greenlee: 0.01–100A`, `ENTES: 5–200A`, `CIRCUTOR: 0.001–0.1A`). Runs first; if it fails, dependent tests for that ammeter are automatically skipped. | Core #1 (Unified API) |
+| `test_<ammeter>_sanity` | `<ammeter>`, `sanity` | Pre-flight TCP reachability and valid physical range (`Greenlee: 0.01–100A`, `ENTES: 5–200A`, `CIRCUTOR: 0.001–0.1A`). Runs first; if it fails, dependent tests for that ammeter fail immediately with `Emulator [<ammeter>] not valid` (fail, not skip, so a broken device cannot produce a green CI run). | Core #1 (Unified API) |
 | `test_<ammeter>_sampling_and_core_stats` | `<ammeter>` | Collects 8 timed samples, validates exact sample count, zero errors, core metrics (`mean`, `median`, `std_dev`, `min`, `max`), confirms precision metrics are off by default, and embeds the real time-series PNG plot into the HTML1 report. | Core #2 (Sampling) & #3 (Result Analysis) |
-| `test_<ammeter>_opt_in_precision_metrics` | `<ammeter>` | Enables `include_precision_metrics=True`, validates `CV`, `IQR`, `CI95`, and `consistency_rating`, and embeds real time-series + boxplot PNGs and precision summary into the HTML1 report. | Bonus #5 (Accuracy & Precision) |
+| `test_<ammeter>_opt_in_precision_metrics` | `<ammeter>` | Enables `include_precision_metrics=True`, validates `CV`, `IQR`, `CI95`, and `consistency_rating`, and embeds real time-series + boxplot PNGs and precision summary into the HTML1 report. | Bonus #5 (Precision & Reliability) |
 
 ### Framework Unit & Maintenance Tests (`tests/test_framework_unit.py` — markers: `unit`, `cleanup`)
 Live emulator values are stochastic; offline deterministic unit tests guarantee exact math, config safety, archiving, visualization, and artifact retention:
@@ -179,10 +180,12 @@ Live emulator values are stochastic; offline deterministic unit tests guarantee 
 | Test | What It Verifies & Why | Assignment Requirement |
 | :--- | :--- | :--- |
 | `test_sampling_resolver_all_two_of_three_pairs` | Any 2 of (`count`, `duration`, `frequency`) accurately derive the 3rd. | Core #2 (Sampling) |
-| `test_sampling_resolver_rejects_conflicts_and_invalid_inputs` | Conflicting 3-of-3, under-specified (<2), or non-positive values raise `ValueError`. | Core #2 + Eval #3 (Error Handling) |
+| `test_sampling_resolver_rejects_conflicts_and_invalid_inputs` | Conflicting 3-of-3, under-specified (<2), non-positive values, and single-flag overrides raise `ValueError`. | Core #2 + Eval #3 (Error Handling) |
+| `test_logger_reinstantiation_writes_to_new_file` | Re-instantiating `TestLogger` with the same name replaces stale handlers and writes cleanly to the new log file. | QA Engineering Enhancement |
 | `test_logger_verbose_vs_info_filtering` | `VERBOSE` (level 15) logs per-sample readings for QA auditing; `INFO` suppresses them for production clarity. | QA Engineering Enhancement |
-| `test_statistical_analyzer_core_and_precision_metrics` | Deterministic math verification on `[10, 20, 30, 40, 50]` for exact core + opt-in precision metrics and empty-input error handling. | Core #3 + Bonus #5 |
-| `test_cross_ammeter_accuracy_ranking` | Verifies scale-independent `CV` ranking identifies the more consistent ammeter (`steady` over `noisy`). | Bonus #5 (Reliability Ranking) |
+| `test_statistical_analyzer_core_and_precision_metrics` | Deterministic math verification on `[10, 20, 30, 40, 50]` for exact core + opt-in precision metrics (including Student-t `CI95`) and empty-input error handling. | Core #3 + Bonus #5 |
+| `test_reliability_ranking_penalizes_errors` | Verifies that a lower-error ammeter outranks a tighter-CV ammeter that suffers failed readings (`success_rate` first, then `CV`). | Bonus #5 (Reliability Ranking) |
+| `test_cross_ammeter_accuracy_ranking` | Verifies scale-independent `CV` ranking identifies the more consistent ammeter (`steady` over `noisy`). | Bonus #5 (Precision Ranking) |
 | `test_result_manager_archive_retrieve_and_compare` | Verifies unique `run_id`, JSON persistence, reload by ID, historical listing, `compare_runs()` deltas, and `FileNotFoundError` on unknown IDs. | Core #4 (Result Management) |
 | `test_visualizer_generates_png_plots` | Runs after all ammeter tests; generates combined `time_series`, `distribution` (with mean marker + legend), and `summary_comparison` PNGs from real session/archived data (falling back to clearly labeled `[VIRTUAL / MOCK DATA]` only if no real run exists) and embeds them in the HTML1 report. | Bonus #3 (Visualization) |
 | `test_standalone_cleanup_old_reports_and_artifacts` | Standalone `@pytest.mark.cleanup` maintenance test: retains only the latest `max_reports` (configured in `config/config.yaml`) and removes older HTML reports along with their linked PNG plots and JSON runs. | QA Engineering Enhancement |
@@ -198,6 +201,8 @@ Validates fault tolerance under simulated hardware anomalies and real TCP/protoc
 | `test_connection_refused_on_closed_port` | Querying an unreachable TCP port raises a clear `ConnectionError`. | Eval #3 (Error Handling) |
 | `test_invalid_command_against_live_greenlee_emulator` | Sending an invalid command to a live emulator (which closes with empty payload) raises `ValueError` cleanly. | Eval #3 (Error Handling) |
 | `test_error_simulator_invalid_payload_and_validation` | Verifies `invalid_payload` injection mode and `ErrorSimulator` parameter validation (`failure_rate`, `error_mode`). | Bonus (Error Simulation) |
+| `test_real_socket_timeout_raises_timeout_error` | Exercises real `client.py` `recv()` timeout path against a silent local TCP server (`TimeoutError`). | Eval #3 (Error Handling) |
+| `test_real_socket_non_numeric_payload_raises_value_error` | Exercises real `client.py` float parser against a malformed TCP response (`ValueError: Invalid numeric payload`). | Eval #3 (Error Handling) |
 
 ---
 
@@ -226,7 +231,7 @@ Workflow: [.github/workflows/ci.yml](.github/workflows/ci.yml)
 2. Click **Run workflow** and choose a test suite (`all`, `sanity`, `greenlee`, `entes`, `circutor`, `unit`, `negative`, or `cleanup`). Each run displays its selected suite in the run title (e.g. `Ammeter Testing CI - Suite all`).
 3. Open the completed run and download the **`ammeter-test-results`** artifact at the bottom of the page — it contains:
    - `results/reports/report_<run_id>.html` (self-contained HTML1 report with inline PNG plots)
-   - `results/runs/<run_id>.json` (archived metadata, raw samples, statistics, and accuracy ranking)
+   - `results/runs/<run_id>.json` (archived metadata, raw samples, statistics, and precision & reliability ranking)
    - `results/plots/*.png` (time-series, distribution boxplot, and CV% comparison charts)
 
 ### Automated Pipeline Steps

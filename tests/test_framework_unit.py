@@ -3,9 +3,9 @@ import os
 
 import pytest
 
-from src.analysis.analyzer import StatisticalAnalyzer
+from src.analysis.analyzer import StatisticalAnalyzer, _t_critical_95
 from src.storage.result_manager import ResultManager
-from src.utils.config import resolve_sampling_params
+from src.utils.config import get_sampling_config, resolve_sampling_params
 from src.utils.logger import TestLogger
 from src.visualization.visualizer import ResultVisualizer
 
@@ -32,6 +32,19 @@ def test_sampling_resolver_rejects_conflicts_and_invalid_inputs() -> None:
         resolve_sampling_params(measurements_count=5)
     with pytest.raises(ValueError, match="positive integer"):
         resolve_sampling_params(measurements_count=0, total_duration_seconds=1.0)
+
+    cfg = {"testing": {"sampling": {"measurements_count": 30, "total_duration_seconds": 3.0}}}
+    with pytest.raises(ValueError, match="Missing sampling argument"):
+        get_sampling_config(cfg, sampling_frequency_hz=20.0)
+
+
+def test_logger_reinstantiation_writes_to_new_file(tmp_path) -> None:
+    TestLogger("dup_logger", log_dir=str(tmp_path / "a"), level="INFO").info("first")
+    second = TestLogger("dup_logger", log_dir=str(tmp_path / "b"), level="INFO")
+    second.info("second")
+    with open(second.log_file, "r", encoding="utf-8") as fh:
+        assert "second" in fh.read()
+    assert len(second.logger.handlers) == 2
 
 
 def test_logger_verbose_vs_info_filtering(tmp_path) -> None:
@@ -70,10 +83,35 @@ def test_statistical_analyzer_core_and_precision_metrics() -> None:
     full = analyzer.analyze(values, include_precision_metrics=True)
     assert full["iqr"] == 20.0
     assert math.isclose(full["cv"], 15.811388 / 30.0, rel_tol=1e-4)
+    assert _t_critical_95(4) == 2.776
+    assert math.isclose(full["ci95_margin"], 2.776 * (15.811388 / math.sqrt(5)), rel_tol=1e-4)
     assert full["ci95_low"] < 30.0 < full["ci95_high"]
 
     with pytest.raises(ValueError):
         analyzer.analyze([])
+
+
+def test_reliability_ranking_penalizes_errors() -> None:
+    analyzer = StatisticalAnalyzer()
+    results = {
+        "precise_but_flaky": {
+            "ammeter_name": "precise_but_flaky",
+            "method": "Flaky Method",
+            "samples": [{"current_amps": v} for v in [10.0, 10.0, 10.1]],
+            "errors_count": 2,
+        },
+        "noisy_but_stable": {
+            "ammeter_name": "noisy_but_stable",
+            "method": "Stable Method",
+            "samples": [{"current_amps": v} for v in [5.0, 9.0, 12.0, 7.0, 10.0]],
+            "errors_count": 0,
+        },
+    }
+    comp = analyzer.compare_ammeters(results)
+    assert comp["most_reliable"] == "noisy_but_stable"
+    assert comp["ranking"][0]["success_rate"] == 1.0
+    assert comp["ranking"][1]["ammeter_name"] == "precise_but_flaky"
+    assert comp["ranking"][1]["success_rate"] == 0.6
 
 
 def test_cross_ammeter_accuracy_ranking() -> None:
@@ -178,7 +216,7 @@ def test_visualizer_generates_png_plots(
     comparison = None
     if len(plot_results) >= 2:
         comparison = StatisticalAnalyzer().compare_ammeters(plot_results)
-        source_note += f"\nAccuracy Assessment: {comparison['summary']}"
+        source_note += f"\nPrecision & Reliability Assessment: {comparison['summary']}"
 
     attach_text_to_report(request, source_note, "Visualizer Data Source")
 

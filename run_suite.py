@@ -1,5 +1,6 @@
 import argparse
 import json
+import sys
 import threading
 import time
 from typing import Dict, List, Type
@@ -9,7 +10,7 @@ from Ammeters.Entes_Ammeter import EntesAmmeter
 from Ammeters.Greenlee_Ammeter import GreenleeAmmeter
 from Ammeters.base_ammeter import AmmeterEmulatorBase
 from src.testing.test_framework import AmmeterTestFramework
-from src.utils.config import get_ammeter_config
+from src.utils.config import get_ammeter_config, get_sampling_config
 
 EMULATOR_CLASSES: Dict[str, Type[AmmeterEmulatorBase]] = {
     "greenlee": GreenleeAmmeter,
@@ -33,7 +34,7 @@ def start_emulators(framework: AmmeterTestFramework, targets: List[str]) -> List
     return started
 
 
-def parse_args() -> argparse.Namespace:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Ammeter Testing Framework CLI — run tests, compare history, and generate reports."
     )
@@ -61,11 +62,12 @@ def parse_args() -> argparse.Namespace:
         metavar=("RUN_A", "RUN_B"),
         help="Compare two archived runs by run_id.",
     )
-    return parser.parse_args()
+    return parser
 
 
-def main() -> None:
-    args = parse_args()
+def main() -> int:
+    parser = build_parser()
+    args = parser.parse_args()
     framework = AmmeterTestFramework(config_path=args.config)
     if args.log_level:
         framework.logger.set_level(args.log_level)
@@ -74,19 +76,29 @@ def main() -> None:
         runs = framework.result_manager.list_runs()
         if not runs:
             print("No archived test runs found.")
-            return
+            return 0
         print(f"Archived runs ({len(runs)}):")
         for item in runs:
             print(
                 f"  - {item['run_id']} | saved={item['saved_at']} | "
                 f"ammeters={','.join(item['ammeters'])} | best={item['most_reliable']}"
             )
-        return
+        return 0
 
     if args.compare_runs:
         diff = framework.result_manager.compare_runs(args.compare_runs[0], args.compare_runs[1])
         print(json.dumps(diff, indent=2))
-        return
+        return 0
+
+    try:
+        get_sampling_config(
+            framework.config,
+            measurements_count=args.count,
+            total_duration_seconds=args.duration,
+            sampling_frequency_hz=args.frequency,
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
 
     targets = args.ammeters or list(framework.configured_ammeters)
     emulators: List[AmmeterEmulatorBase] = []
@@ -114,17 +126,28 @@ def main() -> None:
                     f"min={stats['min']:8.4f}A | max={stats['max']:9.4f}A"
                 )
         if outcome["comparison"]:
-            print(f"\nAccuracy Assessment: {outcome['comparison']['summary']}")
+            print(f"\nPrecision & Reliability Assessment: {outcome['comparison']['summary']}")
         if outcome["saved_path"]:
             print(f"Archived JSON: {outcome['saved_path']}")
         if outcome["plots"]:
             print("Generated Plots:")
             for plot in outcome["plots"]:
                 print(f"  - {plot}")
+
+        failed = [
+            name
+            for name, res in outcome["results"].items()
+            if res.get("errors_count", 0) > 0 or not res.get("statistics")
+        ]
+        if failed:
+            print(f"\nRESULT: FAILED ({', '.join(failed)})")
+            return 1
+        print("\nRESULT: PASSED")
+        return 0
     finally:
         for emulator in emulators:
             emulator.stop()
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

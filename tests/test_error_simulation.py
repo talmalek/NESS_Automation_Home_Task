@@ -1,11 +1,52 @@
+import socket
+import threading
+from contextlib import contextmanager
+from typing import Iterator
+
 import pytest
 
 from Ammeters.client import request_current_from_ammeter
 from src.testing.ammeter_client import BaseAmmeterClient
 from src.testing.sampler import ErrorSimulator
 from src.testing.test_framework import AmmeterTestFramework
+from tests.conftest import log_test_step
 
 pytestmark = pytest.mark.negative
+
+
+@contextmanager
+def _silent_server() -> Iterator[int]:
+    """Accepts TCP connections via backlog but never replies -> client recv() times out."""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as srv:
+        srv.bind(("localhost", 0))
+        srv.listen(1)
+        yield srv.getsockname()[1]
+
+
+@contextmanager
+def _reply_server(payload: bytes) -> Iterator[int]:
+    """Replies once with a fixed payload to exercise real client parsing paths."""
+    srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    srv.bind(("localhost", 0))
+    srv.listen(1)
+    srv.settimeout(2.0)
+
+    def _serve() -> None:
+        try:
+            conn, _ = srv.accept()
+            with conn:
+                conn.recv(1024)
+                conn.sendall(payload)
+        except OSError:
+            pass
+
+    thread = threading.Thread(target=_serve, daemon=True)
+    thread.start()
+    try:
+        yield srv.getsockname()[1]
+    finally:
+        thread.join(timeout=2.0)
+        srv.close()
 
 
 class _ConstantMockClient(BaseAmmeterClient):
@@ -100,3 +141,24 @@ def test_error_simulator_invalid_payload_and_validation(
         ErrorSimulator(failure_rate=1.5)
     with pytest.raises(ValueError, match="Invalid error_mode"):
         ErrorSimulator(failure_rate=0.5, error_mode="unknown_mode")
+
+
+def test_real_socket_timeout_raises_timeout_error() -> None:
+    with _silent_server() as port:
+        log_test_step(
+            f"Connecting to silent TCP server at localhost:{port} (timeout=0.3s); expecting TimeoutError."
+        )
+        with pytest.raises(TimeoutError, match="Timed out") as exc_info:
+            request_current_from_ammeter(port=port, command=b"ANY", timeout=0.3, verbose=False)
+        log_test_step(f"Verified expected TimeoutError: {exc_info.value}")
+
+
+def test_real_socket_non_numeric_payload_raises_value_error() -> None:
+    payload = b"ERR:OVERLOAD"
+    with _reply_server(payload) as port:
+        log_test_step(
+            f"Sending command to stub TCP server at localhost:{port} replying {payload!r}; expecting ValueError."
+        )
+        with pytest.raises(ValueError, match="Invalid numeric payload") as exc_info:
+            request_current_from_ammeter(port=port, command=b"ANY", timeout=1.0, verbose=False)
+        log_test_step(f"Verified expected ValueError: {exc_info.value}")

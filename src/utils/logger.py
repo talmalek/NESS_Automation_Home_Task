@@ -52,24 +52,22 @@ class TestLogger:
         logger.setLevel(self._level)
         logger.propagate = False
 
-        if not logger.handlers:
-            formatter = logging.Formatter(
-                "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
-                datefmt="%Y-%m-%d %H:%M:%S",
-            )
-            file_handler = logging.FileHandler(self.log_file, encoding="utf-8")
-            file_handler.setLevel(self._level)
-            file_handler.setFormatter(formatter)
+        # Replace stale handlers from a previous instance with the same name
+        for old_handler in list(logger.handlers):
+            logger.removeHandler(old_handler)
+            old_handler.close()
 
-            stream_handler = logging.StreamHandler()
-            stream_handler.setLevel(self._level)
-            stream_handler.setFormatter(formatter)
-
-            logger.addHandler(file_handler)
-            logger.addHandler(stream_handler)
-        else:
-            for handler in logger.handlers:
-                handler.setLevel(self._level)
+        formatter = logging.Formatter(
+            "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
+        for handler in (
+            logging.FileHandler(self.log_file, encoding="utf-8"),
+            logging.StreamHandler(),
+        ):
+            handler.setLevel(self._level)
+            handler.setFormatter(formatter)
+            logger.addHandler(handler)
 
         return logger
 
